@@ -1,0 +1,439 @@
+# Lite6 Robot Position Configurations
+# This file defines all physical positions and their corresponding joint angles
+# for each Lite6 robot in the warehouse system.
+#
+# Structure:
+#   xarm<id>:
+#     position_key:
+#       joints: [j1, j2, j3, j4, j5, j6, j7]  # Joint angles in radians
+#       description: "Human-readable description"
+#       type: HOME | ASRS_PICKUP | ASRS_DROP | CONVEYOR_PICKUP | AGV_DROP | TRANSIT
+#
+# Note: All joint angles are in radians
+# Note: Lite6 has 6 DOF, but we keep 7 values for compatibility (last value is 0.0)
+
+xarm1:
+  # Robot IP: 192.168.0.170
+  # ASRS Access: Columns 1, 2, 3 (Rows 1-10)
+  
+  # ==================== HOME & SAFE POSITIONS ====================
+  home:
+    joints: [-59.6, 5.8, 228.9, 107.2, 81, -230.3]
+    description: "Safe home position for xarm1"
+    type: HOME
+  
+  hold:
+    joints: [123.3, -33.6, 203.1, 93.2, 94.4, -354.4]
+    description: "Hold position after pickup"
+    type: TRANSIT
+
+  pre_pickup:
+    joints: [-76.5, -13.4, 228.9, 103, 70.2, -212.7]
+    description: "Hold position before pickup"
+    type: TRANSIT
+  
+  # ==================== ASRS POSITIONS - COLUMN 1 ====================
+  asrs_c1_r1:
+    joints: [-82, -15.4, 228.6, 100, 62.7, -207.1]  # PLACEHOLDER - Replace with actual taught position
+    description: "ASRS Column 1, Row 1 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r2:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 2 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r3:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 3 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r4:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 4 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r5:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 5 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r6:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 6 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r7:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 7 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r8:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 8 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r9:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 9 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c1_r10:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 1, Row 10 pickup position"
+    type: ASRS_PICKUP
+  
+  # ==================== ASRS POSITIONS - COLUMN 2 ====================
+  asrs_c2_r1:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 1 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r2:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 2 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r3:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 3 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r4:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 4 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r5:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 5 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r6:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 6 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r7:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 7 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r8:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 8 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r9:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 9 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c2_r10:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 2, Row 10 pickup position"
+    type: ASRS_PICKUP
+  
+  # ==================== ASRS POSITIONS - COLUMN 3 ====================
+  asrs_c3_r1:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 1 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r2:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 2 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r3:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 3 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r4:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 4 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r5:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 5 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r6:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 6 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r7:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 7 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r8:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 8 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r9:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 9 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c3_r10:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 3, Row 10 pickup position"
+    type: ASRS_PICKUP
+  
+  # ==================== CONVEYOR POSITIONS (PLACEHOLDER) ====================
+  niryo_c1_c11:
+    joints: [116.2, 73.9, 203.1, 135.7, 103, -329.5]  # PLACEHOLDER - To be filled later
+    description: "Conveyor pickup position"
+    type: CONVEYOR_PICKUP
+  
+  conveyor_approach:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "Approach position before conveyor pickup"
+    type: TRANSIT
+  
+  # ==================== AGV POSITIONS ====================
+  agv_drop:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER - Replace with actual taught position
+    description: "AGV drop-off position"
+    type: AGV_DROP
+  
+  agv_approach:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "Approach position before AGV drop"
+    type: TRANSIT
+
+
+xarm2:
+  # Robot IP: 192.168.0.183
+  # ASRS Access: Columns 4, 5, 6 (Rows 1-10)
+  
+  # ==================== HOME & SAFE POSITIONS ====================
+  home:
+    joints: [0.0, -0.4, 1.1, 0.0, 1.4, 0.0, 0.0]
+    description: "Safe home position for xarm2"
+    type: HOME
+  
+  hold:
+    joints: [0.0, -0.2, 0.8, 0.0, 1.0, 0.0, 0.0]
+    description: "Hold position after pickup"
+    type: TRANSIT
+  
+  # ==================== ASRS POSITIONS - COLUMN 4 ====================
+  asrs_c4_r1:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 1 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r2:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 2 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r3:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 3 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r4:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 4 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r5:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 5 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r6:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 6 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r7:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 7 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r8:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 8 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r9:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 9 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c4_r10:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 4, Row 10 pickup position"
+    type: ASRS_PICKUP
+  
+  # ==================== ASRS POSITIONS - COLUMN 5 ====================
+  asrs_c5_r1:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 1 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r2:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 2 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r3:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 3 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r4:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 4 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r5:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 5 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r6:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 6 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r7:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 7 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r8:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 8 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r9:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 9 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c5_r10:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 5, Row 10 pickup position"
+    type: ASRS_PICKUP
+  
+  # ==================== ASRS POSITIONS - COLUMN 6 ====================
+  asrs_c6_r1:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 1 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r2:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 2 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r3:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 3 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r4:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 4 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r5:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 5 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r6:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 6 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r7:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 7 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r8:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 8 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r9:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 9 pickup position"
+    type: ASRS_PICKUP
+  
+  asrs_c6_r10:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "ASRS Column 6, Row 10 pickup position"
+    type: ASRS_PICKUP
+  
+  # ==================== CONVEYOR POSITIONS (PLACEHOLDER) ====================
+  conveyor_pickup:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER - To be filled later
+    description: "Conveyor pickup position"
+    type: CONVEYOR_PICKUP
+  
+  conveyor_approach:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "Approach position before conveyor pickup"
+    type: TRANSIT
+  
+  # ==================== AGV POSITIONS ====================
+  agv_drop:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER - Replace with actual taught position
+    description: "AGV drop-off position"
+    type: AGV_DROP
+  
+  agv_approach:
+    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
+    description: "Approach position before AGV drop"
+    type: TRANSIT
+
+
+# Configuration metadata
+metadata:
+  version: "1.0"
+  date: "2026-01-05"
+  coordinate_system: "UFACTORY_CONVENTION"
+  joint_units: "radians"
+  description: "Physical position configurations for Lite6 robots in warehouse ASRS system"
+  
+  # Position type definitions
+  position_types:
+    HOME: "Default starting position for robot"
+    TRANSIT: "Intermediate safe position for motion planning"
+    ASRS_PICKUP: "Position to pick/place from ASRS rack"
+    ASRS_DROP: "Position to drop object to ASRS rack"
+    CONVEYOR_PICKUP: "Position to pick from conveyor (future)"
+    AGV_DROP: "Position to drop object onto AGV"
+  
+  # ASRS Grid Configuration
+  asrs_grid:
+    total_columns: 6
+    total_rows: 10
+    xarm1_columns: [1, 2, 3]
+    xarm2_columns: [4, 5, 6]
+  
+  # Teaching Instructions
+  teaching_instructions:
+    - "Use xArm Studio or manual teaching mode to record actual positions"
+    - "Replace all [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] with real joint angles"
+    - "Use 'ros2 topic echo /ufactory/joint_states' to get current positions"
+    - "Test each position manually before adding to production"
+    - "Ensure approach positions provide collision-free paths"
+  
+  # Safety Notes
+  safety_notes:
+    - "Always return to home position between operations"
+    - "Use hold position when transitioning between different areas"
+    - "Ensure vacuum is deactivated before moving away from drop positions"
+    - "Test new positions at reduced speed (20-30%) first"

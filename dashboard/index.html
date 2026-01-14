@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factory Dashboard - Vendor Agnostic Testbed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .connection-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .connected {
+            background: #10b981;
+            color: white;
+        }
+
+        .disconnected {
+            background: #ef4444;
+            color: white;
+        }
+
+        .level-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-button {
+            background: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .tab-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .tab-button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .level-content {
+            display: none;
+        }
+
+        .level-content.active {
+            display: block;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .panel-header {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .status-idle { background: #e5e7eb; color: #6b7280; }
+        .status-active { background: #10b981; color: white; }
+        .status-executing { background: #3b82f6; color: white; }
+        .status-queued { background: #f59e0b; color: white; }
+        .status-error { background: #ef4444; color: white; }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-weight: 600;
+            color: #6b7280;
+        }
+
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .order-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .order-item.completed {
+            border-left-color: #10b981;
+            opacity: 0.7;
+        }
+
+        .order-item.in-progress {
+            border-left-color: #3b82f6;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .robot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .robot-card {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+
+        .robot-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .robot-card.active {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .robot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .robot-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .command-box {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #374151;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s;
+        }
+
+        .task-history {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .task-history-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            font-size: 0.85em;
+            border-left: 3px solid #10b981;
+        }
+
+        .timestamp {
+            color: #9ca3af;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏭 Factory Dashboard</h1>
+        <p>Vendor Agnostic Testbed - Real-Time Monitoring</p>
+        <div id="connectionStatus" class="connection-status disconnected">
+            ⚫ Disconnected
+        </div>
+    </div>
+
+    <div class="level-tabs">
+        <button class="tab-button active" onclick="switchLevel(1)">
+            📊 Level 1: Super Factory
+        </button>
+        <button class="tab-button" onclick="switchLevel(2)">
+            🏭 Level 2: Vendor Factories
+        </button>
+        <button class="tab-button" onclick="switchLevel(3)">
+            🤖 Level 3: Individual Robots
+        </button>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- LEVEL 1: Super Factory -->
+        <div id="level1" class="level-content active">
+            <div class="panel">
+                <div class="panel-header">🎯 Super Factory Status</div>
+                <div class="stat-row">
+                    <span class="stat-label">Current State</span>
+                    <span id="superFactoryState" class="status-badge status-idle">IDLE</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Batch Progress</span>
+                    <span id="batchProgress" class="stat-value">0/0 orders</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Tasks Completed</span>
+                    <span id="totalTasksCompleted" class="stat-value">0</span>
+                </div>
+                <div id="progressBarContainer" style="margin-top: 20px;">
+                    <div class="progress-bar">
+                        <div id="batchProgressBar" class="progress-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">📦 Order Tracking</div>
+                <div id="orderList" class="order-list">
+                    <div style="text-align: center; color: #9ca3af; padding: 20px;">
+                        No active orders
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">🏭 Vendor Status</div>
+                <div class="stat-row">
+                    <span class="stat-label">🔷 Lite6 Factory</span>
+                    <div>
+                        <span id="lite6Tasks" class="stat-value">0 tasks</span>
+                        <span id="lite6Status" class="status-badge status-idle">IDLE</span>
+                    </div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">🔶 Niryo Factory</span>
+                    <div>
+                        <span id="niryoTasks" class="stat-value">0 tasks</span>
+                        <span id="niryoStatus" class="status-badge status-idle">IDLE</span>
+                    </div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">📦 ASRS</span>
+                    <span id="asrsStatus" class="status-badge status-idle">IDLE</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">🧠 Algorithm</span>
+                    <span id="algorithmStatus" class="status-badge status-idle">IDLE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- LEVEL 2: Vendor Factories -->
+        <div id="level2" class="level-content">
+            <div class="panel">
+                <div class="panel-header">🔷 Lite6 Factory</div>
+                <div class="stat-row">
+                    <span class="stat-label">Factory State</span>
+                    <span id="lite6FactoryState" class="status-badge status-idle">IDLE</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Tasks Completed</span>
+                    <span id="lite6TasksCount" class="stat-value">0</span>
+                </div>
+                <div class="robot-grid" style="margin-top: 20px;">
+                    <div id="xarm1Card" class="robot-card">
+                        <div class="robot-header">
+                            <span class="robot-name">XARM1</span>
+                            <span class="status-badge status-idle">IDLE</span>
+                        </div>
+                        <div class="command-box" id="xarm1Command">No active command</div>
+                    </div>
+                    <div id="xarm2Card" class="robot-card">
+                        <div class="robot-header">
+                            <span class="robot-name">XARM2</span>
+                            <span class="status-badge status-idle">IDLE</span>
+                        </div>
+                        <div class="command-box" id="xarm2Command">No active command</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">🔶 Niryo Factory</div>
+                <div class="stat-row">
+                    <span class="stat-label">Factory State</span>
+                    <span id="niryoFactoryState" class="status-badge status-idle">IDLE</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Tasks Completed</span>
+                    <span id="niryoTasksCount" class="stat-value">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Active Robots</span>
+                    <span id="niryoActiveRobots" class="stat-value">0/6</span>
+                </div>
+                <div class="robot-grid" style="margin-top: 20px;" id="niryoRobotGrid">
+                    <!-- Robot cards will be dynamically generated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- LEVEL 3: Individual Robots -->
+        <div id="level3" class="level-content">
+            <div class="panel">
+                <div class="panel-header">🤖 Select Robot for Details</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="tab-button" onclick="selectRobot('R1')">R1</button>
+                    <button class="tab-button" onclick="selectRobot('R2')">R2</button>
+                    <button class="tab-button" onclick="selectRobot('R3')">R3</button>
+                    <button class="tab-button" onclick="selectRobot('R4')">R4</button>
+                    <button class="tab-button" onclick="selectRobot('R5')">R5</button>
+                    <button class="tab-button" onclick="selectRobot('R6')">R6</button>
+                    <button class="tab-button" onclick="selectRobot('XARM1')">XARM1</button>
+                    <button class="tab-button" onclick="selectRobot('XARM2')">XARM2</button>
+                </div>
+            </div>
+
+            <div id="robotDetailPanel" class="panel" style="display: none;">
+                <div class="panel-header">🦾 <span id="robotDetailName">Robot</span> - Detailed Status</div>
+                <div class="stat-row">
+                    <span class="stat-label">Current State</span>
+                    <span id="robotDetailState" class="status-badge status-idle">IDLE</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Current Command</span>
+                    <div class="command-box" id="robotDetailCommand">No active command</div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <strong>Task History (Last 10):</strong>
+                    <div class="task-history" id="robotDetailHistory">
+                        <div style="text-align: center; color: #9ca3af; padding: 20px;">
+                            No history available
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

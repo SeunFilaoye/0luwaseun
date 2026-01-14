@@ -1,0 +1,288 @@
+# Lite6 Robot Metadata Configuration
+# This file defines robot capabilities, ASRS access zones, and hardware parameters
+# for each Lite6 robot in the warehouse system.
+#
+# Structure:
+#   xarm<id>:
+#     robot_ip: IP address for ROS2 connection
+#     capabilities: List of operations robot can perform
+#     asrs_access: ASRS columns and rows this robot can reach
+#     accessible_positions: All position keys this robot can use
+#     role: High-level function description
+
+xarm1:
+  # ==================== ROBOT IDENTIFICATION ====================
+  robot_ip: "192.168.0.170"
+  robot_id: "xarm1"
+  robot_namespace: "/ufactory"  # ROS2 namespace for this robot
+  
+  # ==================== CAPABILITIES ====================
+  capabilities:
+    - pick          # Can pick objects from surfaces
+    - place         # Can place objects on surfaces
+    - asrs_storage  # Can store items in ASRS
+    - asrs_retrieval # Can retrieve items from ASRS
+    - agv_handoff   # Can hand off to AGV
+  
+  # ==================== HARDWARE CONFIGURATION ====================
+  hardware:
+    vacuum_gripper: true
+    vacuum_tool_id: 32  # Standard Lite6 vacuum tool ID
+    dof: 6              # Degrees of freedom
+    max_payload: 1.0    # Maximum payload in kg
+    max_reach: 508      # Maximum reach in mm
+  
+  # ==================== ASRS ACCESS ZONE ====================
+  asrs_access:
+    columns: [1, 2, 3]  # ASRS columns this robot can reach
+    rows: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # All rows accessible
+    total_positions: 30  # 3 columns × 10 rows
+  
+  # ==================== ACCESSIBLE POSITIONS ====================
+  accessible_positions:
+    # Home and transit
+    home_positions:
+      - "home"
+      - "hold"
+    
+    # ASRS positions (Column 1)
+    asrs_column_1:
+      - "asrs_c1_r1"
+      - "asrs_c1_r2"
+      - "asrs_c1_r3"
+      - "asrs_c1_r4"
+      - "asrs_c1_r5"
+      - "asrs_c1_r6"
+      - "asrs_c1_r7"
+      - "asrs_c1_r8"
+      - "asrs_c1_r9"
+      - "asrs_c1_r10"
+    
+    # ASRS positions (Column 2)
+    asrs_column_2:
+      - "asrs_c2_r1"
+      - "asrs_c2_r2"
+      - "asrs_c2_r3"
+      - "asrs_c2_r4"
+      - "asrs_c2_r5"
+      - "asrs_c2_r6"
+      - "asrs_c2_r7"
+      - "asrs_c2_r8"
+      - "asrs_c2_r9"
+      - "asrs_c2_r10"
+    
+    # ASRS positions (Column 3)
+    asrs_column_3:
+      - "asrs_c3_r1"
+      - "asrs_c3_r2"
+      - "asrs_c3_r3"
+      - "asrs_c3_r4"
+      - "asrs_c3_r5"
+      - "asrs_c3_r6"
+      - "asrs_c3_r7"
+      - "asrs_c3_r8"
+      - "asrs_c3_r9"
+      - "asrs_c3_r10"
+    
+    # Conveyor positions (future use)
+    conveyor_positions:
+      - "conveyor_pickup"
+      - "conveyor_approach"
+    
+    # AGV positions
+    agv_positions:
+      - "agv_drop"
+      - "agv_approach"
+  
+  # ==================== ROBOT ROLE ====================
+  role: "warehouse_handler_zone_1"
+  description: "Handles ASRS columns 1-3, interfaces with conveyor and AGV"
+  
+  # ==================== OPERATING PARAMETERS ====================
+  operating_parameters:
+    default_speed: 30.0       # Default joint speed (deg/sec or %)
+    default_acceleration: 100.0  # Default acceleration
+    safe_speed: 20.0          # Safe/slow speed for critical operations
+    vacuum_activation_time: 0.5  # Time to wait after vacuum activation (seconds)
+    position_settling_time: 0.5  # Time to wait after reaching position (seconds)
+
+
+xarm2:
+  # ==================== ROBOT IDENTIFICATION ====================
+  robot_ip: "192.168.0.183"
+  robot_id: "xarm2"
+  robot_namespace: "/ufactory"  # ROS2 namespace for this robot
+  
+  # ==================== CAPABILITIES ====================
+  capabilities:
+    - pick          # Can pick objects from surfaces
+    - place         # Can place objects on surfaces
+    - asrs_storage  # Can store items in ASRS
+    - asrs_retrieval # Can retrieve items from ASRS
+    - agv_handoff   # Can hand off to AGV
+  
+  # ==================== HARDWARE CONFIGURATION ====================
+  hardware:
+    vacuum_gripper: true
+    vacuum_tool_id: 32  # Standard Lite6 vacuum tool ID
+    dof: 6              # Degrees of freedom
+    max_payload: 1.0    # Maximum payload in kg
+    max_reach: 508      # Maximum reach in mm
+  
+  # ==================== ASRS ACCESS ZONE ====================
+  asrs_access:
+    columns: [4, 5, 6]  # ASRS columns this robot can reach
+    rows: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # All rows accessible
+    total_positions: 30  # 3 columns × 10 rows
+  
+  # ==================== ACCESSIBLE POSITIONS ====================
+  accessible_positions:
+    # Home and transit
+    home_positions:
+      - "home"
+      - "hold"
+    
+    # ASRS positions (Column 4)
+    asrs_column_4:
+      - "asrs_c4_r1"
+      - "asrs_c4_r2"
+      - "asrs_c4_r3"
+      - "asrs_c4_r4"
+      - "asrs_c4_r5"
+      - "asrs_c4_r6"
+      - "asrs_c4_r7"
+      - "asrs_c4_r8"
+      - "asrs_c4_r9"
+      - "asrs_c4_r10"
+    
+    # ASRS positions (Column 5)
+    asrs_column_5:
+      - "asrs_c5_r1"
+      - "asrs_c5_r2"
+      - "asrs_c5_r3"
+      - "asrs_c5_r4"
+      - "asrs_c5_r5"
+      - "asrs_c5_r6"
+      - "asrs_c5_r7"
+      - "asrs_c5_r8"
+      - "asrs_c5_r9"
+      - "asrs_c5_r10"
+    
+    # ASRS positions (Column 6)
+    asrs_column_6:
+      - "asrs_c6_r1"
+      - "asrs_c6_r2"
+      - "asrs_c6_r3"
+      - "asrs_c6_r4"
+      - "asrs_c6_r5"
+      - "asrs_c6_r6"
+      - "asrs_c6_r7"
+      - "asrs_c6_r8"
+      - "asrs_c6_r9"
+      - "asrs_c6_r10"
+    
+    # Conveyor positions (future use)
+    conveyor_positions:
+      - "conveyor_pickup"
+      - "conveyor_approach"
+    
+    # AGV positions
+    agv_positions:
+      - "agv_drop"
+      - "agv_approach"
+  
+  # ==================== ROBOT ROLE ====================
+  role: "warehouse_handler_zone_2"
+  description: "Handles ASRS columns 4-6, interfaces with conveyor and AGV"
+  
+  # ==================== OPERATING PARAMETERS ====================
+  operating_parameters:
+    default_speed: 30.0       # Default joint speed (deg/sec or %)
+    default_acceleration: 100.0  # Default acceleration
+    safe_speed: 20.0          # Safe/slow speed for critical operations
+    vacuum_activation_time: 0.5  # Time to wait after vacuum activation (seconds)
+    position_settling_time: 0.5  # Time to wait after reaching position (seconds)
+
+
+# ==================== SYSTEM METADATA ====================
+metadata:
+  version: "1.0"
+  date: "2026-01-05"
+  description: "Robot metadata for Lite6 warehouse ASRS system"
+  
+  # ==================== CAPABILITY DEFINITIONS ====================
+  capabilities_definitions:
+    pick: "Robot can pick objects using vacuum gripper"
+    place: "Robot can place objects by deactivating vacuum"
+    asrs_storage: "Robot can store items in assigned ASRS columns"
+    asrs_retrieval: "Robot can retrieve items from assigned ASRS columns"
+    agv_handoff: "Robot can hand off items to AGV"
+  
+  # ==================== ROLE DEFINITIONS ====================
+  role_definitions:
+    warehouse_handler_zone_1: "Manages ASRS columns 1-3 and interfaces"
+    warehouse_handler_zone_2: "Manages ASRS columns 4-6 and interfaces"
+  
+  # ==================== ASRS SYSTEM LAYOUT ====================
+  asrs_system:
+    total_columns: 6
+    total_rows: 10
+    total_capacity: 60  # positions
+    
+    zone_1:
+      robot: "xarm1"
+      columns: [1, 2, 3]
+      capacity: 30
+    
+    zone_2:
+      robot: "xarm2"
+      columns: [4, 5, 6]
+      capacity: 30
+  
+  # ==================== HARDWARE CONSTRAINTS ====================
+  hardware_constraints:
+    vacuum_tool_id: 32
+    max_payload_kg: 1.0
+    max_reach_mm: 508
+    joint_count: 6
+    position_repeatability_mm: 0.05
+  
+  # ==================== SPEED RECOMMENDATIONS ====================
+  speed_guidelines:
+    fast_transit: 50.0      # For movements far from obstacles
+    normal_operation: 30.0  # Standard pick/place operations
+    precise_placement: 20.0 # Near ASRS slots or AGV
+    teaching_mode: 10.0     # For manual teaching
+  
+  # ==================== COMMAND FORMAT ====================
+  command_examples:
+    pick_from_asrs: "PICK_ASRS_C2_R5"      # Pick from Column 2, Row 5
+    store_to_asrs: "STORE_ASRS_C4_R8"      # Store to Column 4, Row 8
+    handoff_to_agv: "HANDOFF_AGV"          # Drop at AGV position
+    pick_from_conveyor: "PICK_CONVEYOR"    # Pick from conveyor (future)
+    go_home: "GO_HOME"                     # Return to home position
+  
+  # ==================== POSITION NAMING CONVENTION ====================
+  naming_convention:
+    asrs_positions: "asrs_c<column>_r<row>"
+    example: "asrs_c3_r7 = Column 3, Row 7"
+    conveyor_positions: "conveyor_<action>"
+    agv_positions: "agv_<action>"
+    transit_positions: "<location>_approach"
+  
+  # ==================== NOTES ====================
+  notes:
+    - "Both robots share the same ROS2 namespace '/ufactory' but different IPs"
+    - "Position keys reference lite6_positions.yaml for actual joint angles"
+    - "ASRS columns are physically divided between robots for efficiency"
+    - "Conveyor positions are placeholders for future integration"
+    - "Each robot can independently access AGV drop position"
+    - "Factory node coordinates which robot handles which request"
+  
+  # ==================== SAFETY GUIDELINES ====================
+  safety:
+    - "Always verify vacuum activation before lifting"
+    - "Return to home position when idle"
+    - "Use slower speeds near ASRS slots to prevent collisions"
+    - "Ensure proper settling time after position changes"
+    - "Monitor vacuum pressure for successful grip confirmation"

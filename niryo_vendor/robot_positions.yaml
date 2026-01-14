@@ -1,0 +1,366 @@
+# Niryo Robot Position Configurations
+# This file defines all physical positions and their corresponding joint angles
+# for each Niryo robot in the testbed.
+#
+# Structure:
+#   robot_<id>:
+#     position_key:
+#       joints: [j1, j2, j3, j4, j5, j6]  # Joint angles in radians
+#       description: "Human-readable description"
+#       type: PICKUP | DROP | HOME | HOLD | CAMERA | TRANSIT
+#
+# Note: All joint angles are in radians
+# Note: Position keys (P11, D11, etc.) are physical identifiers used by robot controllers
+
+robot_1:
+  # Feeder Robot (R1) Configuration
+  home_joints:
+    joints: [1.570, 0.522, -1.158, -0.038, -0.005, -0.012]
+    description: "Home position for Robot 1"
+    type: HOME
+  
+  hold_joints:
+    joints: [2.077, -0.010, -0.323, -0.040, -1.223, -0.626]
+    description: "Hold position after pickup"
+    type: HOLD
+  
+  # Pickup positions (feeder can pick from multiple locations)
+  P11:
+    joints: [2.107, -0.878, 0.207, -0.228, -0.884, -0.419]
+    description: "Pickup position - right side"
+    type: PICKUP
+  
+  P12:
+    joints: [2.342, -0.425, -0.587, 0.445, -0.856, -0.429]
+    description: "Pickup position - left side 1"
+    type: PICKUP
+  
+  P13:
+    joints: [2.536, -0.672, -0.155, 0.511, -0.916, -0.449]
+    description: "Pickup position - left side 2"
+    type: PICKUP
+  
+  # Drop position (onto conveyor)
+  D11:
+    joints: [1.833, -0.441, -0.623, 0.114, -0.589, -0.506]
+    description: "Drop position onto conveyor"
+    type: DROP
+  
+  # Pre-grip positions (approach positions before pickup)
+  pregrip_P11:
+    joints: [2.179, -0.676, 0.211, -0.267, -1.108, -0.403]
+    description: "Pre-grip position for P11"
+    type: TRANSIT
+  
+  pregrip_P12:
+    joints: [2.372, -0.197, -0.592, 0.339, -0.974, -0.429]
+    description: "Pre-grip position for P12"
+    type: TRANSIT
+  
+  pregrip_P13:
+    joints: [2.498, -0.494, -0.142, 0.503, -0.996, -0.448]
+    description: "Pre-grip position for P13"
+    type: TRANSIT
+
+robot_2:
+  # Processing Robot R2 - Junction/Router Robot
+  home_joints:
+    joints: [0.002, 0.596, -1.008, -0.020, -0.994, -1.150]
+    description: "Home position for Robot 2"
+    type: HOME
+  
+  hold_joints:
+    joints: [0.826, 0.092, -0.533, 0.005, -1.072, -1.169]
+    description: "Hold position after pickup"
+    type: HOLD
+  
+  # Pickup positions (from different conveyors)
+  P11:
+    joints: [-0.249, -0.399, -0.799, -0.061, -0.583, -1.147]
+    description: "Pickup from Conveyor C1"
+    type: PICKUP
+  
+  P12:
+    joints: [1.479, -0.446, -0.708, 0.239, -0.468, -1.147]
+    description: "Pickup from Conveyor C2"
+    type: PICKUP
+  
+  P13:
+    joints: [0.873, -1.175, 0.678, -0.026, -1.100, -1.135]
+    description: "Pickup from Conveyor C3"
+    type: PICKUP
+  
+  # Drop positions (to different conveyors)
+  D11:
+    joints: [-0.133, -0.372, -0.832, -0.055, -0.510, -0.526]
+    description: "Drop to Conveyor C1"
+    type: DROP
+  
+  D12:
+    joints: [1.439, -0.370, -0.725, 0.040, -0.535, -1.229]
+    description: "Drop to Conveyor C2"
+    type: DROP
+  
+  D13:
+    joints: [0.856, -1.035, 0.493, 0.005, -1.063, -1.229]
+    description: "Drop to Conveyor C3"
+    type: DROP
+  
+  # Camera positions (for future classification capability)
+  camera_joints_P11:
+    joints: [-0.221, 0.119, -0.946, -0.020, -0.974, -1.037]
+    description: "Camera observation position for C1"
+    type: CAMERA
+  
+  camera_joints_P12:
+    joints: [1.532, -0.031, -0.575, 0.015, -1.003, -1.140]
+    description: "Camera observation position for C2"
+    type: CAMERA
+  
+  camera_joints_P13:
+    joints: [0.849, -0.617, 0.119, 0.017, -1.054, -1.141]
+    description: "Camera observation position for C3"
+    type: CAMERA
+
+robot_3:
+  # Processing Robot R3
+  home_joints:
+    joints: [0.002, 0.596, -1.008, -0.020, -0.994, -1.150]
+    description: "Home position for Robot 3"
+    type: HOME
+  
+  hold_joints:
+    joints: [1.186, 0.031, -0.275, 0.011, -1.071, -1.132]
+    description: "Hold position after pickup"
+    type: HOLD
+  
+  # Pickup positions
+  P11:
+    joints: [-0.077, -0.387, -0.779, 0.048, -0.457, -0.086]
+    description: "Pickup from Conveyor C3"
+    type: PICKUP
+  
+  P12:
+    joints: [1.579, -0.432, -0.661, 0.249, -0.534, -0.969]
+    description: "Pickup from Conveyor C5"
+    type: PICKUP
+  
+  # Drop positions
+  D11:
+    joints: [1.631, -0.887, -0.258, 0.103, -0.999, -0.093]
+    description: "Drop to Conveyor C3"
+    type: DROP
+  
+  D12:
+    joints: [1.644, -0.909, 0.316, 0.061, -1.069, -1.130]
+    description: "Drop to Conveyor C5"
+    type: DROP
+  
+  # Camera positions
+  camera_joints_P11:
+    joints: [-0.019, 0.052, -0.886, 0.022, -0.936, -0.093]
+    description: "Camera observation position for C3"
+    type: CAMERA
+  
+  camera_joints_P12:
+    joints: [1.606, -0.023, -0.860, 0.091, -0.819, -0.969]
+    description: "Camera observation position for C5"
+    type: CAMERA
+  
+  camera_joints_P13:
+    joints: [-1.787, -0.597, -0.139, -0.104, -1.111, -0.972]
+    description: "Camera observation position - alternate"
+    type: CAMERA
+
+robot_4:
+  # Processing Robot R4
+  home_joints:
+    joints: [-0.069, 0.218, -0.867, -0.005, -1.201, -1.247]
+    description: "Home position for Robot 4"
+    type: HOME
+  
+  hold_joints:
+    joints: [-1.080, 0.215, -0.411, -0.074, -1.384, -1.054]
+    description: "Hold position after pickup"
+    type: HOLD
+  
+  # Pickup positions
+  P11:
+    joints: [0.138, -0.382, -0.892, -0.063, -0.440, -1.207]
+    description: "Pickup from Conveyor C2"
+    type: PICKUP
+  
+  P12:
+    joints: [-1.660, -0.073, -0.792, -0.070, -0.925, 0.158]
+    description: "Pickup from Conveyor C4"
+    type: PICKUP
+  
+  P13:
+    joints: [1.574, -0.797, -0.139, 0.023, -0.815, -0.005]
+    description: "Pickup from vertical buffer (VB)"
+    type: PICKUP
+  
+  # Drop positions
+  D11:
+    joints: [0.101, -0.326, -0.879, -0.001, -0.509, 0.161]
+    description: "Drop to Conveyor C2"
+    type: DROP
+  
+  D12:
+    joints: [-1.687, -0.537, -0.466, -0.152, -0.752, -1.178]
+    description: "Drop to Conveyor C4"
+    type: DROP
+  
+  D13:
+    joints: [1.574, -0.797, -0.139, 0.023, -0.815, -0.005]
+    description: "Drop to vertical buffer (VB)"
+    type: DROP
+  
+  # Camera positions
+  camera_joints_P11:
+    joints: [0.066, 0.254, -1.064, -0.022, -1.003, 0.014]
+    description: "Camera observation position for C2"
+    type: CAMERA
+  
+  camera_joints_P12:
+    joints: [1.495, 0.221, -1.023, 0.049, -0.907, -0.290]
+    description: "Camera observation position for C4"
+    type: CAMERA
+  
+  camera_joints_P13:
+    joints: [1.582, -0.478, -0.472, -0.005, -0.815, -0.005]
+    description: "Camera observation position for VB"
+    type: CAMERA
+
+robot_5:
+  # Processing Robot R5 - Terminal Robot with Multi-bin Sorting
+  home_joints:
+    joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.770]
+    description: "Home position for Robot 5"
+    type: HOME
+  
+  hold_joints:
+    joints: [-0.774, -0.091, -0.317, -0.066, -1.160, -1.759]
+    description: "Hold position after pickup"
+    type: HOLD
+  
+  # Pickup positions
+  P11:
+    joints: [0.033, -0.375, -0.867, -0.083, -0.474, -1.618]
+    description: "Pickup from Conveyor C4"
+    type: PICKUP
+  
+  P12:
+    joints: [-1.663, -0.588, -0.454, -0.155, -0.723, -1.546]
+    description: "Pickup from Conveyor C5"
+    type: PICKUP
+  
+  # Drop positions (sorting bins)
+  D11:
+    joints: [-0.918, -0.578, -0.267, 0.101, -0.812, -0.953]
+    description: "Drop to Red bin"
+    type: DROP
+  
+  D12:
+    joints: [-0.701, -0.944, 0.345, -0.047, -0.974, -0.946]
+    description: "Drop to Blue bin"
+    type: DROP
+  
+  D13:
+    joints: [-1.083, -1.041, 0.626, -0.026, -1.126, -0.948]
+    description: "Drop to Green bin"
+    type: DROP
+  
+  # Camera positions
+  camera_joints_P11:
+    joints: [0.001, 0.143, -0.979, -0.028, -1.032, -1.747]
+    description: "Camera observation position for C4"
+    type: CAMERA
+  
+  camera_joints_P12:
+    joints: [-1.650, -0.078, -0.672, 0.084, -1.036, -0.943]
+    description: "Camera observation position for C5"
+    type: CAMERA
+  
+  pre_camera_P12:
+    joints: [-1.354, 0.396, -0.689, -0.041, -1.402, -0.977]
+    description: "Pre-camera approach position for C5"
+    type: TRANSIT
+
+
+robot_6:
+  # Processing Robot R5 - Terminal Robot with Multi-bin Sorting
+  home_joints:
+    joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.770]
+    description: "Home position for Robot 5"
+    type: HOME
+  
+  hold_joints:
+    joints: [-0.774, -0.091, -0.317, -0.066, -1.160, -1.759]
+    description: "Hold position after pickup"
+    type: HOLD
+  
+  # Pickup positions
+  P11:
+    joints: [0.033, -0.375, -0.867, -0.083, -0.474, -1.618]
+    description: "Pickup from Conveyor C4"
+    type: PICKUP
+  
+  P12:
+    joints: [-1.663, -0.588, -0.454, -0.155, -0.723, -1.546]
+    description: "Pickup from Conveyor C5"
+    type: PICKUP
+  
+  # Drop positions (sorting bins)
+  D11:
+    joints: [-0.918, -0.578, -0.267, 0.101, -0.812, -0.953]
+    description: "Drop to Red bin"
+    type: DROP
+  
+  D12:
+    joints: [-0.701, -0.944, 0.345, -0.047, -0.974, -0.946]
+    description: "Drop to Blue bin"
+    type: DROP
+  
+  D13:
+    joints: [-1.083, -1.041, 0.626, -0.026, -1.126, -0.948]
+    description: "Drop to Green bin"
+    type: DROP
+  
+  # Camera positions
+  camera_joints_P11:
+    joints: [0.001, 0.143, -0.979, -0.028, -1.032, -1.747]
+    description: "Camera observation position for C4"
+    type: CAMERA
+  
+  camera_joints_P12:
+    joints: [-1.650, -0.078, -0.672, 0.084, -1.036, -0.943]
+    description: "Camera observation position for C5"
+    type: CAMERA
+  
+  pre_camera_P12:
+    joints: [-1.354, 0.396, -0.689, -0.041, -1.402, -0.977]
+    description: "Pre-camera approach position for C5"
+    type: TRANSIT
+
+# Configuration metadata
+metadata:
+  version: "1.0"
+  date: "2024-12-22"
+  coordinate_system: "DH_CONVENTION"
+  joint_units: "radians"
+  description: "Physical position configurations for Niryo NED2 robots in vendor-agnostic testbed"
+  
+  # Position type definitions
+  position_types:
+    HOME: "Default starting position for robot"
+    HOLD: "Safe holding position with object secured"
+    PICKUP: "Position to pick object from surface/conveyor"
+    DROP: "Position to drop object onto surface/conveyor"
+    CAMERA: "Position for camera observation (future use)"
+    TRANSIT: "Intermediate position for safe motion"
+  
+  # Joint limits (for validation)
+  joint_limits:
+    min: [-3.14159, -3.14159, -3.14159, -3.14159, -3.14159, -3.14159]
+    max: [3.14159, 3.14159, 3.14159, 3.14159, 3.14159, 3.14159]

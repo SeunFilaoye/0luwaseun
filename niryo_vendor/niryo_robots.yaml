@@ -1,0 +1,215 @@
+# Niryo Robot Metadata Configuration
+# This file defines robot capabilities, workspace positions, and hardware parameters
+# for each Niryo robot in the testbed.
+#
+# Structure:
+#   robot_<id>:
+#     capabilities: [list of operations robot can perform]
+#     vacuum_tool_id: <hardware tool ID>
+#     workspace_positions: [list of reachable position keys]
+#     conveyors_accessible: [list of conveyors this robot can interact with]
+#     description: "Human-readable description"
+#
+# Note: Position keys reference physical positions defined in niryo_positions.yaml
+
+robot_1:
+  # Feeder Robot (R1)
+  capabilities:
+    - pick
+    - place
+    - classify
+    - route
+  has_camera: false
+  vacuum_tool_id: 32
+  workspace_positions:
+    - home_joints
+    - hold_joints
+    - P11  # Pickup right
+    - P12  # Pickup left 1
+    - P13  # Pickup left 2
+    - D11  # Drop to conveyor
+    - pregrip_P11
+    - pregrip_P12
+    - pregrip_P13
+  conveyors_accessible:
+    - C1  # Feeds to C1 (output conveyor)
+    - C2  # This is converyo with ID 10
+  max_payload: 0.3  # kg
+  role: "router"
+  description: "Router- picks parts from either C1, C2 and feeds to processing line"
+
+robot_2:
+  # Junction/Router Robot (R2)
+  capabilities:
+    - pick
+    - place
+    - classify  # Has camera for classification
+    - route     # Routes to different downstream paths
+  has_camera: true
+  vacuum_tool_id: 32
+  workspace_positions:
+    - home_joints
+    - hold_joints
+    - P11  # Pickup from C1
+    - P12  # Pickup from C2
+    - P13  # Pickup from C3
+    - D11  # Drop to C1
+    - D12  # Drop to C2
+    - D13  # Drop to C3
+    - camera_joints_P11
+    - camera_joints_P12
+    - camera_joints_P13
+  conveyors_accessible:
+    - C1  # Input from feeder
+    - C2  # Output to R4 path
+    - C3  # Output to R3 path
+  max_payload: 0.3  # kg
+  role: "router"
+  description: "Junction robot - classifies parts and routes to C2 (R4 path) or C3 (R3 path)"
+
+robot_3:
+  # Processing Robot R3 (C3 path)
+  capabilities:
+    - pick
+    - place
+  has_camera: false
+  vacuum_tool_id: 32
+  workspace_positions:
+    - home_joints
+    - hold_joints
+    - P11  # Pickup from C3
+    - P12  # Pickup from C5
+    - D11  # Drop to C3
+    - D12  # Drop to C5
+    - camera_joints_P11
+    - camera_joints_P12
+    - camera_joints_P13
+  conveyors_accessible:
+    - C3  # Input from R2
+    - C5  # Output to R5
+  max_payload: 0.3  # kg
+  role: "processor"
+  description: "Processing robot on C3 path - receives from R2, sends to R5 via C5"
+
+robot_4:
+  # Processing Robot R4 (C2 path)
+  capabilities:
+    - pick
+    - place
+  has_camera: false
+  vacuum_tool_id: 32
+  workspace_positions:
+    - home_joints
+    - hold_joints
+    - P11  # Pickup from C2
+    - P12  # Pickup from C4
+    - P13  # Pickup from VB (vertical buffer)
+    - D11  # Drop to C2
+    - D12  # Drop to C4
+    - D13  # Drop to VB
+    - camera_joints_P11
+    - camera_joints_P12
+    - camera_joints_P13
+  conveyors_accessible:
+    - C2  # Input from R2
+    - C4  # Output to R5
+  max_payload: 0.3  # kg
+  role: "processor"
+  description: "Processing robot on C2 path - receives from R2, sends to R5 via C4"
+
+robot_5:
+  # Processing Robot R4 (C2 path)
+  capabilities:
+    - pick
+    - place
+  has_camera: false
+  vacuum_tool_id: 32
+  workspace_positions:
+    - home_joints
+    - hold_joints
+    - P11  # Pickup from C2
+    - P12  # Pickup from C4
+    - P13  # Pickup from VB (vertical buffer)
+    - D11  # Drop to C2
+    - D12  # Drop to C4
+    - D13  # Drop to VB
+    - camera_joints_P11
+    - camera_joints_P12
+    - camera_joints_P13
+  conveyors_accessible:
+    - C2  # Input from R2
+    - C4  # Output to R5
+  max_payload: 0.3  # kg
+  role: "processor"
+  description: "Processing robot on C2 path - receives from R2, sends to R5 via C4"
+
+robot_6:
+  # Terminal/Sorting Robot R5
+  capabilities:
+    - pick
+    - place
+    - sort  # Sorts to multiple bins
+  has_camera: false
+  vacuum_tool_id: 32
+  workspace_positions:
+    - home_joints
+    - hold_joints
+    - P11  # Pickup from C4
+    - P12  # Pickup from C5
+    - D11  # Drop to Red bin
+    - D12  # Drop to Blue bin
+    - D13  # Drop to Green bin
+    - camera_joints_P11
+    - camera_joints_P12
+    - pre_camera_P12
+  conveyors_accessible:
+    - C4  # Input from R4
+    - C5  # Input from R3
+  max_payload: 0.3  # kg
+  role: "sorter"
+  description: "Terminal robot - receives from C4 or C5, sorts to color-coded bins"
+
+# Configuration metadata
+metadata:
+  version: "1.0"
+  date: "2024-12-22"
+  description: "Robot metadata for Niryo vendor-agnostic testbed"
+  
+  # Capability definitions
+  capabilities:
+    pick: "Robot can pick objects from surfaces/conveyors"
+    place: "Robot can place objects on surfaces/conveyors"
+    classify: "Robot can classify objects using vision (requires camera)"
+    route: "Robot can route parts to different downstream paths"
+    feed: "Robot can feed parts to the processing line"
+    sort: "Robot can sort parts to multiple destinations"
+  
+  # Role definitions
+  roles:
+    feeder: "Feeds parts from buffer to processing line"
+    router: "Routes parts to different processing paths based on classification"
+    processor: "Processes parts along a specific path"
+    sorter: "Sorts completed parts to final destinations"
+  
+  # Conveyor mapping (for reference)
+  conveyors:
+    C1: "Feeder output / R2 input"
+    C2: "R2 to R4 path"
+    C3: "R2 to R3 path"
+    C4: "R4 to R5 path"
+    C5: "R3 to R5 path"
+  
+  # Hardware constraints
+  hardware:
+    vacuum_tool_id: 32  # Standard Niryo vacuum pump tool ID
+    max_payload: 0.3    # Maximum payload in kg
+    joint_count: 6      # All robots have 6 DOF
+  
+  # Notes
+  notes:
+    - "Position keys reference niryo_positions.yaml"
+    - "Conveyor IDs reference niryo_conveyors.yaml"
+    - "Robot 1 is feeder (not typically used in Phase 1)"
+    - "Robot 2 is junction/router with classification capability"
+    - "Robots 3-4 are processing robots on parallel paths"
+    - "Robot 5 is terminal sorter receiving from both paths"
