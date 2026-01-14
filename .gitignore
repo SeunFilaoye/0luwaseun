@@ -43,3 +43,6 @@ ENV/
 
 # Logs
 *.log
+
+# claude
+*.claude
