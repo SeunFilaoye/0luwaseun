@@ -70,9 +70,13 @@ class SuperFactoryNode(Node):
                 'command_topic': '/niryo_factory/command',
                 'ack_topic': '/niryo_factory/ack',
                 'status_topic': '/niryo_factory/status'
+            },
+            'agv': {
+                'command_topic': '/agv_factory/command',
+                'ack_topic': '/agv_factory/ack',
+                'status_topic': '/agv_factory/status'
             }
             # Add more vendors here as needed:
-            # 'agv': {...},
             # 'kuka': {...},
         }
 
@@ -523,6 +527,19 @@ class SuperFactoryNode(Node):
                 command = f"{robot_id} | {action1} - {loc1} | {action2} - {loc2}"
                 return command
 
+        elif vendor == 'agv':
+            # Expected: ["AGV1", "PICKUP", "A", "DROP", "D"]
+            # or: ["AGV1", "PICKUP", "STATION_A", "DROP", "STATION_D"]
+            if len(parts) >= 5:
+                action1 = parts[1]
+                loc1 = parts[2]
+                action2 = parts[3]
+                loc2 = parts[4]
+
+                # Format: "AGV1 | PICKUP - A | DROP - D"
+                command = f"{robot_id} | {action1} - {loc1} | {action2} - {loc2}"
+                return command
+
         self.get_logger().error(f"❌ Failed to convert trajectory to {vendor} format")
         return None
 
@@ -535,6 +552,8 @@ class SuperFactoryNode(Node):
         - XARM2 → lite6
         - R1 → niryo
         - R2 → niryo
+        - AGV1 → agv
+        - ALVIK1 → agv
 
         Args:
             robot_id: Robot identifier
@@ -546,6 +565,10 @@ class SuperFactoryNode(Node):
 
         if 'XARM' in robot_id_upper:
             return 'lite6'
+        elif 'AGV' in robot_id_upper:
+            return 'agv'
+        elif 'ALVIK' in robot_id_upper:
+            return 'agv'
         elif robot_id_upper.startswith('R') and len(robot_id_upper) <= 3:
             # R1, R2, etc. → niryo
             return 'niryo'

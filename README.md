@@ -6,7 +6,7 @@ A flexible, vendor-agnostic robotic manufacturing testbed with graph-based traje
 
 ## 🎯 Overview
 
-This system orchestrates multiple robot vendors (Lite6, Niryo, and any future vendors) in a unified, vendor-agnostic manner. The key innovation is a **graph-based abstraction layer** that allows routing algorithms to plan trajectories without knowing specific robot brands or physical layouts.
+This system orchestrates multiple robot vendors (Lite6, Niryo, AGV, and any future vendors) in a unified, vendor-agnostic manner. The key innovation is a **graph-based abstraction layer** that allows routing algorithms to plan trajectories without knowing specific robot brands or physical layouts.
 
 ### Key Features
 
@@ -24,8 +24,8 @@ This system orchestrates multiple robot vendors (Lite6, Niryo, and any future ve
 ```
 Orders → Super Factory → ASRS Query → Algorithm Planning → Vendor Routing → Execution
                               ↓              ↓                    ↓
-                           Inventory    Graph-Based          Lite6/Niryo
-                                        Trajectories          Factories
+                           Inventory    Graph-Based          Lite6/Niryo/AGV
+                                        Trajectories            Factories
 ```
 
 ### 3-Tier Architecture
@@ -79,6 +79,10 @@ vendor_agnostic_testbed/
 ├── niryo_vendor/
 │   ├── niryo_factory_node.py        # Niryo router
 │   └── (robot controllers...)
+├── agv_vendor/
+│   ├── agv_factory_node.py          # AGV router
+│   ├── agv_robots.yaml              # AGV configuration
+│   └── BaseAGV.ino                  # Arduino firmware
 ├── algorithm_vendor/
 │   ├── algorithm_node.py            # Main algorithm node
 │   ├── graph_encoder.py             # YAML → Graph
@@ -132,13 +136,19 @@ cd niryo_vendor
 python3 niryo_factory_node.py
 ```
 
-**Terminal 5: Super Factory**
+**Terminal 5: AGV Factory**
+```bash
+cd agv_vendor
+python3 agv_factory_node.py
+```
+
+**Terminal 6: Super Factory**
 ```bash
 cd super_factory
 python3 superfactory.py
 ```
 
-**Terminal 6: Dashboard** (Optional)
+**Terminal 7: Dashboard** (Optional)
 ```bash
 ./launch_dashboard.sh
 # Open browser: http://localhost:8080
@@ -146,7 +156,7 @@ python3 superfactory.py
 
 ### Sending Test Orders
 
-**Terminal 7:**
+**Terminal 8:**
 ```bash
 # Send 5 orders to trigger batch processing
 for i in {1..5}; do
@@ -163,7 +173,7 @@ done
 Real-time 3-level monitoring dashboard:
 
 - **Level 1: Super Factory** - Overall status, batch progress, vendor health
-- **Level 2: Vendor Factories** - Lite6/Niryo status, robot utilization
+- **Level 2: Vendor Factories** - Lite6/Niryo/AGV status, robot utilization
 - **Level 3: Individual Robots** - Detailed robot view, command history
 
 Access at: `http://localhost:8080`
@@ -244,6 +254,7 @@ ros2 topic echo /super_factory/status
 ros2 topic echo /algorithm/trajectory
 ros2 topic echo /lite6_factory/status
 ros2 topic echo /niryo_factory/status
+ros2 topic echo /agv_factory/status
 ```
 
 ---
@@ -309,25 +320,121 @@ Clean separation enables algorithm interchangeability.
 
 ## 🔬 Example Workflow
 
-**Input:** 5 orders for parts [1, 2, 1, 2, 2]
+### Simple Example: Order with Parts [1, 2]
 
-1. **Super Factory** batches orders
-2. **ASRS** provides locations: part_1 in C1, part_2 in C2
-3. **Super Factory** assigns: All to Xarm1 (columns 1-3)
-4. **Algorithm Node** plans paths:
-   - Loads graph from YAML
-   - Runs Dijkstra for each part
-   - Returns node sequences
-5. **Action Mapper** decodes:
-   - Node edges → Vendor commands
-   - Substitutes ASRS row/column
-6. **Super Factory** routes commands:
-   - XARM commands → Lite6 Factory
-   - R1-R6 commands → Niryo Factory
-7. **Vendor Factories** execute:
-   - Parse and route to robots
-   - Send status updates
-8. **Dashboard** monitors in real-time
+This example shows how two parts flow through the system using all three vendors.
+
+**Scenario:**
+- **Part 1**: XARM → AGV → Niryo → Exit (uses AGV for transport)
+- **Part 2**: XARM → Conveyor → Niryo chain → Exit (uses conveyor handoffs)
+
+#### Step 1: Order Submission
+
+```bash
+ros2 topic pub --once /super_factory/order std_msgs/msg/String \
+    "data: '{\"order_id\": \"ORD_001\", \"parts\": [1, 2]}'"
+```
+
+#### Step 2: ASRS Response
+
+ASRS returns part locations:
+```json
+{
+  "part_1": ["C1R1", "C1R2"],
+  "part_2": ["C2R1", "C2R2"]
+}
+```
+
+#### Step 3: Algorithm Trajectories
+
+The algorithm computes optimal paths and returns:
+
+```
+XARM1 | PICKUP | ASRS | C1 R1 | DROP | AGV | A
+AGV1 | PICKUP | A | DROP | D
+R1 | PICKUP | D | DROP | EXIT
+
+XARM1 | PICKUP | ASRS | C2 R1 | DROP | CONVEYOR | C1
+R1 | PICKUP | C1 | DROP | D12
+R2 | PICKUP | D12 | DROP | D23
+R3 | PICKUP | D23 | DROP | EXIT
+```
+
+#### Step 4: Vendor Routing
+
+Superfactory parses and routes each command:
+
+| Trajectory | Vendor | Command Sent |
+|------------|--------|--------------|
+| `XARM1 \| PICKUP \| ASRS \| C1 R1 \| DROP \| AGV \| A` | lite6 | `XARM1 \| PICKUP - ASRS C1 R1 \| DROP - AGV A` |
+| `AGV1 \| PICKUP \| A \| DROP \| D` | agv | `AGV1 \| PICKUP - A \| DROP - D` |
+| `R1 \| PICKUP \| D \| DROP \| EXIT` | niryo | `R1 \| PICKUP - D \| DROP - EXIT` |
+| `XARM1 \| PICKUP \| ASRS \| C2 R1 \| DROP \| CONVEYOR \| C1` | lite6 | `XARM1 \| PICKUP - ASRS C2 R1 \| DROP - CONVEYOR C1` |
+| `R1 \| PICKUP \| C1 \| DROP \| D12` | niryo | `R1 \| PICKUP - C1 \| DROP - D12` |
+| `R2 \| PICKUP \| D12 \| DROP \| D23` | niryo | `R2 \| PICKUP - D12 \| DROP - D23` |
+| `R3 \| PICKUP \| D23 \| DROP \| EXIT` | niryo | `R3 \| PICKUP - D23 \| DROP - EXIT` |
+
+#### Step 5: Sequential Execution
+
+Commands execute one at a time, waiting for ACK + COMPLETE:
+
+```
+                            ORDER [1, 2]
+                                 │
+                    ┌────────────┴────────────┐
+                    ▼                         ▼
+               PART 1                     PART 2
+                    │                         │
+          ┌─────────┴─────────┐    ┌─────────┴─────────────────────┐
+          ▼                   │    ▼                               │
+    ┌──────────┐              │  ┌──────────┐                      │
+    │  XARM1   │ (lite6)      │  │  XARM1   │ (lite6)              │
+    │ ASRS→AGV │              │  │ ASRS→C1  │                      │
+    └────┬─────┘              │  └────┬─────┘                      │
+         ▼                    │       ▼                            │
+    ┌──────────┐              │  ┌──────────┐                      │
+    │   AGV1   │ (agv)        │  │    R1    │ (niryo)              │
+    │   A→D    │              │  │  C1→D12  │                      │
+    └────┬─────┘              │  └────┬─────┘                      │
+         ▼                    │       ▼                            │
+    ┌──────────┐              │  ┌──────────┐                      │
+    │    R1    │ (niryo)      │  │    R2    │ (niryo)              │
+    │  D→EXIT  │              │  │ D12→D23  │                      │
+    └────┬─────┘              │  └────┬─────┘                      │
+         ▼                    │       ▼                            │
+      ✅ DONE                 │  ┌──────────┐                      │
+                              │  │    R3    │ (niryo)              │
+                              │  │ D23→EXIT │                      │
+                              │  └────┬─────┘                      │
+                              │       ▼                            │
+                              │    ✅ DONE                         │
+                              └────────────────────────────────────┘
+```
+
+#### Communication Flow Detail (Part 1, Step 2: AGV)
+
+```
+Superfactory                      AGV Factory                     Alvik1 (Arduino)
+     │                                 │                               │
+     │── "AGV1|PICKUP-A|DROP-D" ──────>│                               │
+     │                                 │── "deliver d" ───────────────>│
+     │<── "ACK - AGV1|PICKUP..." ──────│                               │
+     │                                 │<── {"state":"WAITING_LOAD"} ──│
+     │                                 │── "ready" ───────────────────>│
+     │                                 │<── {"state":"MOVING"} ────────│
+     │                                 │<── {"state":"ARRIVED"} ───────│
+     │                                 │── "ready" ───────────────────>│
+     │                                 │<── {"state":"IDLE"} ──────────│
+     │<── "COMMAND_COMPLETE" ──────────│                               │
+     │                                 │                               │
+```
+
+### Key Takeaways
+
+1. **Vendor Agnostic**: Superfactory doesn't care *how* each vendor executes
+2. **Three Vendors**: Lite6 (XARM), AGV (Alvik), Niryo (R1-R6) work seamlessly together
+3. **Sequential**: Commands execute one at a time with ACK/COMPLETE handshaking
+4. **Flexible Routing**: Algorithm can route through AGV or conveyor based on optimization
 
 ---
 
@@ -395,10 +502,10 @@ def _convert_to_vendor_format(self, parts, vendor):
 - 3D visualization
 
 ### System
-- AGV integration
 - Multi-batch processing
 - Priority queues
 - Load balancing
+- Additional vendor integrations
 
 ---
 

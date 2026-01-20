@@ -1,0 +1,59 @@
+# AGV Robot Configuration
+# Defines the AGV fleet for the vendor-agnostic testbed
+
+# AGV definitions
+agvs:
+  agv_1:
+    name: "Alvik1"              # Hardware name (used for ROS2 topics)
+    start_position: "A"         # Initial queue position
+    mac_address: "74:4D:BD:9F:C6:E8"
+
+  agv_2:
+    name: "Alvik2"
+    start_position: "B"
+    mac_address: "3C:84:27:C2:BC:40"
+
+  agv_3:
+    name: "Alvik3"
+    start_position: "C"
+    mac_address: null           # Unknown MAC
+
+# Queue positions (pickup locations)
+# AGVs wait in a queue at positions A, B, C
+# Position A is the service position (front of queue)
+queue_positions:
+  - "A"   # Service position (front of queue)
+  - "B"   # Second in queue
+  - "C"   # Third in queue (back of queue)
+
+# Destination positions (drop locations)
+# Parts are delivered to D or E
+destinations:
+  - "D"   # First delivery station
+  - "E"   # Second delivery station
+
+# Station mappings (for command translation)
+# Maps abstract station names to physical locations
+stations:
+  STATION_A: "A"
+  STATION_B: "B"
+  STATION_C: "C"
+  STATION_D: "D"
+  STATION_E: "E"
+  # ASRS integration points
+  AGV_PICKUP: "A"
+  AGV_DROP_D: "D"
+  AGV_DROP_E: "E"
+
+# Communication settings
+communication:
+  # Topics follow pattern: {name}_cmd, {name}_status
+  # e.g., Alvik1_cmd, Alvik1_status
+  command_suffix: "_cmd"
+  status_suffix: "_status"
+
+# Timing settings
+timing:
+  status_timeout_sec: 2.0       # AGV considered offline after this
+  command_ack_timeout_sec: 5.0  # Max wait for command acknowledgment
+  delivery_timeout_sec: 120.0   # Max time for delivery cycle
