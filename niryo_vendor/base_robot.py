@@ -11,7 +11,7 @@ Key Features:
 - YAML-based position configuration loading
 - ROS2 service client abstraction for hardware
 - Primitive motion operations (move_to_joints, move_to_position)
-- Primitive vacuum operations (pull, push, neutral)
+- Primitive tool operations (vacuum pull/push/neutral, gripper open/close)
 - Thread-safe message queue for async communication
 - Graceful error handling and recovery
 
@@ -83,8 +83,12 @@ class BaseRobot(Node, ABC):
         # Load robot-specific configuration from YAML
         self.config = self.load_robot_configuration(robot_id, config_path)
         
-        # Extract vacuum tool configuration
-        self.vacuum_tool_id = self.config.get('vacuum_tool_id', 32)
+        # Extract tool configuration
+        self.tool_type = self.config.get('tool_type', 'vacuum')
+        if self.tool_type == 'gripper':
+            self.gripper_tool_id = self.config.get('gripper_tool_id', 11)
+        else:
+            self.vacuum_tool_id = self.config.get('vacuum_tool_id', 32)
         
         # Setup ROS2 services and action clients
         self.setup_services()
@@ -150,9 +154,15 @@ class BaseRobot(Node, ABC):
                 raise ValueError(f"Missing required position '{pos}' for {robot_key}")
         
         # Add hardware defaults if not specified
-        if 'vacuum_tool_id' not in robot_config:
-            robot_config['vacuum_tool_id'] = 32
-            self.get_logger().warn(f"Using default vacuum_tool_id: 32")
+        tool_type = robot_config.get('tool_type', 'vacuum')
+        if tool_type == 'gripper':
+            if 'gripper_tool_id' not in robot_config:
+                robot_config['gripper_tool_id'] = 11
+                self.get_logger().warn(f"Using default gripper_tool_id: 11")
+        else:
+            if 'vacuum_tool_id' not in robot_config:
+                robot_config['vacuum_tool_id'] = 32
+                self.get_logger().warn(f"Using default vacuum_tool_id: 32")
         
         self.get_logger().info(f"Loaded configuration for Robot {robot_id} with {len(robot_config)} positions")
         
@@ -161,21 +171,31 @@ class BaseRobot(Node, ABC):
     def setup_services(self):
         """
         Initialize ROS2 service clients for hardware communication.
-        
+
         Creates clients for:
-        - Vacuum control (pull/push)
+        - Tool control (vacuum pull/push or gripper open/close)
         - Robot motion (action client)
         """
-        # Vacuum control services
-        self.vacuum_pull_client = self.create_client(
-            ToolCommand, 
-            f'/{self.namespace}/niryo_robot/tools/pull_air_vacuum_pump'
-        )
-        
-        self.vacuum_push_client = self.create_client(
-            ToolCommand, 
-            f'/{self.namespace}/niryo_robot/tools/push_air_vacuum_pump'
-        )
+        if self.tool_type == 'gripper':
+            # Gripper control services
+            self.gripper_open_client = self.create_client(
+                ToolCommand,
+                f'/{self.namespace}/niryo_robot/tools/open_gripper'
+            )
+            self.gripper_close_client = self.create_client(
+                ToolCommand,
+                f'/{self.namespace}/niryo_robot/tools/close_gripper'
+            )
+        else:
+            # Vacuum control services
+            self.vacuum_pull_client = self.create_client(
+                ToolCommand,
+                f'/{self.namespace}/niryo_robot/tools/pull_air_vacuum_pump'
+            )
+            self.vacuum_push_client = self.create_client(
+                ToolCommand,
+                f'/{self.namespace}/niryo_robot/tools/push_air_vacuum_pump'
+            )
         
         # Robot motion action client
         self.robot_move_client = ActionClient(
@@ -211,10 +231,16 @@ class BaseRobot(Node, ABC):
         """
         self.get_logger().info(f"Robot {self.robot_id}: Waiting for services...")
         
-        services = [
-            (self.vacuum_pull_client, "Vacuum pull service"),
-            (self.vacuum_push_client, "Vacuum push service"),
-        ]
+        if self.tool_type == 'gripper':
+            services = [
+                (self.gripper_open_client, "Gripper open service"),
+                (self.gripper_close_client, "Gripper close service"),
+            ]
+        else:
+            services = [
+                (self.vacuum_pull_client, "Vacuum pull service"),
+                (self.vacuum_push_client, "Vacuum push service"),
+            ]
         
         # Wait for service clients
         for client, name in services:
@@ -402,6 +428,67 @@ class BaseRobot(Node, ABC):
             )
             return False
     
+    def control_gripper(self, mode):
+        """
+        Control standard gripper.
+
+        Args:
+            mode (str): Gripper mode - 'open' or 'close'
+
+        Returns:
+            bool: True if command successful, False otherwise
+        """
+        if mode not in ['open', 'close']:
+            self.get_logger().error(
+                f"Robot {self.robot_id}: Invalid gripper mode '{mode}'"
+            )
+            return False
+
+        req = ToolCommand.Request()
+        req.id = self.gripper_tool_id
+        req.speed = 500
+        req.hold_torque = 800
+        req.max_torque = 1000
+
+        if mode == "close":
+            req.position = 0
+            client = self.gripper_close_client
+        else:  # open
+            req.position = 1000
+            client = self.gripper_open_client
+
+        try:
+            future = client.call_async(req)
+            rclpy.spin_until_future_complete(self, future)
+            self.get_logger().info(f"Robot {self.robot_id}: Gripper {mode} command sent")
+            return True
+        except Exception as e:
+            self.get_logger().error(
+                f"Robot {self.robot_id}: Gripper control error ({mode}): {e}"
+            )
+            return False
+
+    def grip(self):
+        """Activate tool to grip an object (vacuum pull or gripper close)."""
+        if self.tool_type == 'gripper':
+            return self.control_gripper("close")
+        else:
+            return self.control_vacuum("pull")
+
+    def release(self):
+        """Activate tool to release an object (vacuum push or gripper open)."""
+        if self.tool_type == 'gripper':
+            return self.control_gripper("open")
+        else:
+            return self.control_vacuum("push")
+
+    def tool_neutral(self):
+        """Set tool to neutral state (vacuum neutral or gripper open)."""
+        if self.tool_type == 'gripper':
+            return self.control_gripper("open")
+        else:
+            return self.control_vacuum("neutral")
+
     # Message queue utilities for async communication
     
     def add_message_to_queue(self, message_type, data):
@@ -457,9 +544,9 @@ class BaseRobot(Node, ABC):
             self.get_logger().error(f"Robot {self.robot_id}: Failed to move to home")
             return False
         
-        # Set vacuum to neutral
-        if not self.control_vacuum("neutral"):
-            self.get_logger().error(f"Robot {self.robot_id}: Failed to set vacuum neutral")
+        # Set tool to neutral
+        if not self.tool_neutral():
+            self.get_logger().error(f"Robot {self.robot_id}: Failed to set tool neutral")
             return False
         
         self.get_logger().info(f"Robot {self.robot_id}: Initialization complete")
@@ -478,8 +565,8 @@ class BaseRobot(Node, ABC):
         self.get_logger().info(f"Robot {self.robot_id}: Shutting down...")
         self.shutdown_event.set()
         
-        # Neutral vacuum
-        self.control_vacuum("neutral")
+        # Neutral tool
+        self.tool_neutral()
         
         # Move to home
         self.move_to_position('home_joints', "shutdown home position")

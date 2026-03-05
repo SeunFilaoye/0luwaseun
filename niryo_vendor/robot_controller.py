@@ -212,6 +212,17 @@ class NiryoRobotController(BaseRobot):
             return
 
         try:
+            # Custom sequence command (multi-step positions + vacuum events)
+            if 'SEQUENCE' in command.upper():
+                sequence_data = self._parse_sequence_command(command)
+                if sequence_data:
+                    self.current_task = sequence_data
+                    self.task_start_time = time.time()
+                    self.add_message_to_queue('sequence_command', sequence_data)
+                else:
+                    self.get_logger().error(f"❌ Failed to parse sequence command: {command}")
+                return
+
             # Parse pick/place command
             if '|' in command and 'PICKUP' in command.upper() and 'DROP' in command.upper():
                 task_data = self._parse_pick_place_command(command)
@@ -316,23 +327,91 @@ class NiryoRobotController(BaseRobot):
         # Return the position key directly (e.g., "P12", "C11", "D12")
         return location.strip()
 
+    def _parse_sequence_command(self, command: str) -> dict:
+        """
+        Parse a sequence command.
+
+        Expected format:
+        "R6 | SEQUENCE | pos1 -> pos2 -> pos3 | VACUUM:pull@pos2 | VACUUM:push@pos4"
+        or
+        "R6 | SEQUENCE pos1 -> pos2 -> pos3 | VACUUM:pull@pos2 | VACUUM:push@pos4"
+        """
+        parts = [p.strip() for p in command.split('|')]
+        if len(parts) < 3:
+            return None
+
+        seq_part = None
+        vacuum_parts = []
+
+        # Locate SEQUENCE token and capture positions part
+        for idx, part in enumerate(parts[1:], start=1):
+            if part.upper().startswith('SEQUENCE'):
+                # Case 1: "SEQUENCE pos1 -> pos2"
+                if part.upper() != 'SEQUENCE':
+                    seq_part = part
+                else:
+                    # Case 2: "SEQUENCE | pos1 -> pos2"
+                    if idx + 1 < len(parts):
+                        seq_part = parts[idx + 1]
+                continue
+            if part.upper().startswith('VACUUM:'):
+                vacuum_parts.append(part)
+
+        if not seq_part:
+            return None
+
+        if seq_part.upper().startswith('SEQUENCE'):
+            seq_body = seq_part.split('SEQUENCE', 1)[1].strip()
+            if seq_body.startswith('-'):
+                seq_body = seq_body[1:].strip()
+            if seq_body.startswith(':'):
+                seq_body = seq_body[1:].strip()
+        else:
+            seq_body = seq_part.strip()
+
+        # Positions separated by '->'
+        positions = [p.strip() for p in seq_body.split('->') if p.strip()]
+        if not positions:
+            return None
+
+        vacuum_events = []
+        for vac in vacuum_parts:
+            # Format VACUUM:pull@pos
+            try:
+                vac_body = vac.split(':', 1)[1].strip()
+                action, pos = vac_body.split('@', 1)
+                action = action.strip().lower()
+                pos = pos.strip()
+                if action in ['pull', 'push', 'neutral'] and pos:
+                    vacuum_events.append({'action': action, 'position': pos})
+            except ValueError:
+                continue
+
+        return {
+            'task_id': f"seq_{int(time.time())}",
+            'positions': positions,
+            'vacuum_events': vacuum_events
+        }
+
     def execute_task(self, task):
         """
         Execute complete pick-and-place task.
 
         State machine sequence:
         1. IDLE → MOVING_TO_PICKUP
-        2. Move to pickup position
-        3. MOVING_TO_PICKUP → PICKING
-        4. Activate vacuum
-        5. PICKING → HOLDING
-        6. HOLDING → MOVING_TO_DROP
-        7. Move to drop position
-        8. MOVING_TO_DROP → DROPPING
-        9. Release vacuum
-        10. DROPPING → RETURNING_HOME
-        11. Move to home
-        12. RETURNING_HOME → DONE → IDLE
+        2. Move to pregrip position (safe approach for pickup)
+        3. Move down to pickup position
+        4. MOVING_TO_PICKUP → PICKING
+        5. Activate vacuum
+        6. Retreat to pregrip position (safe clearance with part)
+        7. PICKING → HOLDING
+        8. HOLDING → MOVING_TO_DROP
+        9. Move to drop position
+        10. MOVING_TO_DROP → DROPPING
+        11. Release vacuum
+        12. DROPPING → RETURNING_HOME
+        13. Move to home
+        14. RETURNING_HOME → DONE → IDLE
 
         Args:
             task (dict): Task data with pickup and drop positions
@@ -343,48 +422,65 @@ class NiryoRobotController(BaseRobot):
         pickup_pos = task['pickup_position_key']
         drop_pos = task['drop_position_key']
 
+        # Derive pregrip approach position from pickup key (e.g., P11 -> pregrip_P11)
+        pregrip_pos = f'pregrip_{pickup_pos}'
+
         try:
-            # Step 1: Move to pickup position
-            self.set_state(self.STATE_MOVING_TO_PICKUP, f"Moving to {pickup_pos}")
+            # Step 1: Move to pregrip position (safe approach before pickup)
+            self.set_state(self.STATE_MOVING_TO_PICKUP, f"Approaching {pickup_pos} via pregrip")
+            if pregrip_pos in self.config:
+                if not self.move_to_position(pregrip_pos):
+                    self.set_state(self.STATE_ERROR, f"Failed to move to {pregrip_pos}")
+                    return False
+            else:
+                self.get_logger().warn(
+                    f"Robot R{self.robot_id}: No pregrip position '{pregrip_pos}' found, "
+                    f"moving directly to {pickup_pos}"
+                )
+
+            # Step 2: Move down to pickup position
             if not self.move_to_position(pickup_pos):
                 self.set_state(self.STATE_ERROR, "Failed to move to pickup position")
                 return False
 
-            # Step 2: Activate vacuum and pick
+            # Step 3: Grip object
             self.set_state(self.STATE_PICKING, f"Picking from {pickup_pos}")
-            if not self.control_vacuum("pull"):
-                self.set_state(self.STATE_ERROR, "Failed to activate vacuum")
+            if not self.grip():
+                self.set_state(self.STATE_ERROR, "Failed to grip object")
                 return False
 
-            # Wait for vacuum to engage
+            # Wait for tool to engage
             time.sleep(0.5)
 
-            # Step 3: Hold position
-            self.set_state(self.STATE_HOLDING, "Object secured")
-            if not self.move_to_position('hold_joints'):
-                self.set_state(self.STATE_ERROR, "Failed to move to hold position")
-                return False
+            # Step 4: Retreat to pregrip position (safe clearance before swinging)
+            if pregrip_pos in self.config:
+                if not self.move_to_position(pregrip_pos):
+                    self.set_state(self.STATE_ERROR, f"Failed to retreat to {pregrip_pos}")
+                    return False
 
-            # Step 4: Move to drop position
+            # Step 5: Object secured, proceed directly to drop
+            self.set_state(self.STATE_HOLDING, "Object secured")
+
+            # Step 6: Move to drop position
             self.set_state(self.STATE_MOVING_TO_DROP, f"Moving to {drop_pos}")
             if not self.move_to_position(drop_pos):
                 self.set_state(self.STATE_ERROR, "Failed to move to drop position")
                 return False
 
-            # Step 5: Release object
+            # Step 7: Release object
             self.set_state(self.STATE_DROPPING, f"Dropping at {drop_pos}")
-            if not self.control_vacuum("push"):
-                self.set_state(self.STATE_ERROR, "Failed to release vacuum")
+            if not self.release():
+                self.set_state(self.STATE_ERROR, "Failed to release object")
                 return False
 
             # Wait for release
             time.sleep(0.5)
 
-            # Neutral vacuum
-            if not self.control_vacuum("neutral"):
-                self.get_logger().warn("Failed to neutralize vacuum")
+            # Neutral tool
+            if not self.tool_neutral():
+                self.get_logger().warn("Failed to neutralize tool")
 
-            # Step 6: Return to home
+            # Step 8: Return to home
             self.set_state(self.STATE_RETURNING_HOME, "Returning home")
             if not self.move_to_position('home_joints'):
                 self.set_state(self.STATE_ERROR, "Failed to return to home")
@@ -421,8 +517,8 @@ class NiryoRobotController(BaseRobot):
         self.set_state("INITIALIZING", "Initialization started")
 
         try:
-            # Neutralize vacuum
-            self.control_vacuum("neutral")
+            # Neutralize tool
+            self.tool_neutral()
             time.sleep(0.3)
 
             # Move to home position
@@ -443,6 +539,53 @@ class NiryoRobotController(BaseRobot):
         except Exception as e:
             self.get_logger().error(f"❌ Robot R{self.robot_id}: Initialization error: {e}")
             self.set_state(self.STATE_ERROR, f"Initialization exception: {str(e)}")
+            return False
+
+    def execute_sequence(self, task):
+        """
+        Execute a custom sequence of positions with vacuum events.
+        """
+        positions = task.get('positions', [])
+        vacuum_events = task.get('vacuum_events', [])
+
+        self.set_state(self.STATE_MOVING_TO_PICKUP, "Sequence start")
+
+        try:
+            for pos in positions:
+                if not self.move_to_position(pos):
+                    self.set_state(self.STATE_ERROR, f"Failed to move to {pos}")
+                    return False
+
+                # Trigger any tool events at this position
+                for ev in vacuum_events:
+                    if ev['position'] == pos:
+                        if ev['action'] == 'pull':
+                            self.set_state(self.STATE_PICKING, f"Gripping at {pos}")
+                            success = self.grip()
+                        elif ev['action'] == 'push':
+                            self.set_state(self.STATE_DROPPING, f"Releasing at {pos}")
+                            success = self.release()
+                        else:
+                            success = self.tool_neutral()
+                        if not success:
+                            self.set_state(self.STATE_ERROR, f"Tool {ev['action']} failed at {pos}")
+                            return False
+                        # Notify factory that pickup is complete (used for AGV return)
+                        if ev['action'] == 'pull':
+                            self.publish_status("READY")
+                        time.sleep(0.3)
+
+            # Task complete - publish DONE before IDLE
+            self.set_state(self.STATE_DONE, "Sequence completed successfully")
+            time.sleep(0.5)
+            self.set_state(self.STATE_IDLE, "Ready for next task")
+            return True
+
+        except Exception as e:
+            self.get_logger().error(
+                f"Robot R{self.robot_id}: Exception during sequence execution: {e}"
+            )
+            self.set_state(self.STATE_ERROR, f"Sequence exception: {str(e)}")
             return False
 
     def check_timeout(self):
@@ -511,8 +654,8 @@ class NiryoRobotController(BaseRobot):
         self.get_logger().warn(f"Robot R{self.robot_id}: Attempting recovery from ERROR state")
 
         try:
-            # Release vacuum
-            self.control_vacuum("neutral")
+            # Release tool
+            self.tool_neutral()
             time.sleep(0.5)
 
             # Try to return home
@@ -567,11 +710,21 @@ class NiryoRobotController(BaseRobot):
                                 f"{self.get_state()} state"
                             )
 
+                    elif message['type'] == 'sequence_command':
+                        if self.get_state() == self.STATE_IDLE:
+                            task = message['data']
+                            self.execute_sequence(task)
+                        else:
+                            self.get_logger().warn(
+                                f"Robot R{self.robot_id}: Cannot execute sequence in "
+                                f"{self.get_state()} state"
+                            )
+
                     elif message['type'] == 'initialize':
                         self.execute_initialize()
 
-                # Brief sleep to prevent busy waiting
-                time.sleep(0.1)
+                # Spin to process incoming ROS2 messages (subscriptions)
+                rclpy.spin_once(self, timeout_sec=0.1)
 
             except Exception as e:
                 self.get_logger().error(

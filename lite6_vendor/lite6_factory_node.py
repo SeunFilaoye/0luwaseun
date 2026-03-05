@@ -19,6 +19,7 @@ Date: 2026-01-11
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String
 import threading
 import time
@@ -42,28 +43,38 @@ class Lite6FactoryNode(Node):
         # Load robot configuration
         self._load_robot_config()
         
-        # Command queue for sequential processing
-        self.command_queue = Queue()
-        
+        # Per-robot queues for parallel pick/place execution
+        self.robot_queues = {
+            'xarm1': Queue(),
+            'xarm2': Queue()
+        }
+        # General queue for non-robot-specific commands (INITIALIZE_ALL, etc.)
+        self.general_queue = Queue()
+
         # Track robot status
         self.robot_status = {
             'xarm1': 'UNKNOWN',
             'xarm2': 'UNKNOWN'
         }
-        
+
         # Track acknowledgments
         self.robot_acks = {
             'xarm1': None,
             'xarm2': None
         }
-        
+
         # Setup communication
         self._setup_topics()
-        
-        # Start command processor thread
-        self.command_processor_thread = threading.Thread(
-            target=self._command_processor, daemon=True)
-        self.command_processor_thread.start()
+
+        # Start per-robot processor threads (XARM1 and XARM2 run in parallel)
+        for robot_id in ['xarm1', 'xarm2']:
+            t = threading.Thread(target=self._robot_processor, args=(robot_id,), daemon=True)
+            t.start()
+
+        # Start general command processor for init/other commands
+        self.general_processor_thread = threading.Thread(
+            target=self._general_command_processor, daemon=True)
+        self.general_processor_thread.start()
         
         self.get_logger().info("=" * 60)
         self.get_logger().info("✅ LITE6 FACTORY NODE READY")
@@ -110,10 +121,12 @@ class Lite6FactoryNode(Node):
                                 lambda msg: self._on_ack_received('xarm2', msg), 10)
         
         # Status subscribers (robots → factory)
+        # Transient local matches the robot publishers so late joins receive last status
+        status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, '/xarm1/status',
-                                lambda msg: self._on_status_received('xarm1', msg), 10)
+                                lambda msg: self._on_status_received('xarm1', msg), status_qos)
         self.create_subscription(String, '/xarm2/status',
-                                lambda msg: self._on_status_received('xarm2', msg), 10)
+                                lambda msg: self._on_status_received('xarm2', msg), status_qos)
         
         # High-level command subscriber (external → factory)
         self.create_subscription(String, '/lite6_factory/command',
@@ -153,47 +166,87 @@ class Lite6FactoryNode(Node):
         status = msg.data
         self.robot_status[robot_id] = status
         self.get_logger().info(f"📊 [{robot_id}] STATUS: {status}")
+
+        # Forward READY status to superfactory for AGV handoff
+        if 'READY' in status.upper():
+            self._publish_global_status(f"READY_{robot_id.upper()}")
     
     def _on_high_level_command(self, msg):
         """
         Callback when high-level command is received.
-        
+
+        Pick/place commands are routed to the robot's own queue so XARM1 and
+        XARM2 execute independently in parallel.  All other commands (INITIALIZE_ALL,
+        etc.) go to the general queue.
+
         Format: "ROBOT_ID | PICKUP - LOCATION | DROP - LOCATION"
-        
-        Args:
-            msg: String message containing command
         """
         command = msg.data
         self.get_logger().info(f"📥 HIGH-LEVEL COMMAND: {command}")
-        
-        # Add to queue
-        self.command_queue.put(command)
+
+        command_upper = command.upper().strip()
+
+        # Route pick/place commands directly to the target robot's queue
+        if '|' in command and 'PICKUP' in command_upper and 'DROP' in command_upper:
+            robot_id_str = command.split('|')[0].strip().upper()
+            robot_id = self._parse_robot_id(robot_id_str)
+            if robot_id:
+                self.robot_queues[robot_id].put(command)
+                return
+
+        # Anything else (INITIALIZE_ALL, etc.) goes to the general queue
+        self.general_queue.put(command)
     
     # ==================== COMMAND PROCESSING ====================
-    
-    def _command_processor(self):
-        """Thread that processes commands from queue sequentially."""
-        self.get_logger().info("🔄 Command processor thread started")
-        
+
+    def _robot_processor(self, robot_id: str):
+        """
+        Per-robot processor thread.  Handles pick/place commands for one xArm
+        independently so XARM1 and XARM2 can run in parallel.
+        """
+        self.get_logger().info(f"🔄 {robot_id.upper()} processor thread started")
+
         while True:
             try:
-                # Wait for next command
-                command = self.command_queue.get(block=True)
-                
+                command = self.robot_queues[robot_id].get(block=True)
+
+                self.get_logger().warn(f"\n{'='*60}")
+                self.get_logger().warn(f"🚨 [{robot_id.upper()}] PROCESSING: {command}")
+                self.get_logger().warn(f"{'='*60}\n")
+
+                self._handle_pick_place_for_robot(robot_id, command)
+
+                self.robot_queues[robot_id].task_done()
+
+                self.get_logger().warn(f"\n{'='*60}")
+                self.get_logger().warn(f"🏁 [{robot_id.upper()}] COMPLETED: {command}")
+                self.get_logger().warn(f"{'='*60}\n")
+
+            except Exception as e:
+                self.get_logger().error(f"❌ Error in {robot_id} processor: {e}")
+                import traceback
+                self.get_logger().error(traceback.format_exc())
+
+    def _general_command_processor(self):
+        """Handles non-robot-specific commands such as INITIALIZE_ALL."""
+        self.get_logger().info("🔄 General command processor thread started")
+
+        while True:
+            try:
+                command = self.general_queue.get(block=True)
+
                 self.get_logger().warn(f"\n{'='*60}")
                 self.get_logger().warn(f"🚨 PROCESSING COMMAND: {command}")
                 self.get_logger().warn(f"{'='*60}\n")
-                
-                # Execute command
+
                 self._execute_command(command)
-                
-                # Mark as done
-                self.command_queue.task_done()
-                
+
+                self.general_queue.task_done()
+
                 self.get_logger().warn(f"\n{'='*60}")
                 self.get_logger().warn(f"🏁 COMMAND COMPLETED: {command}")
                 self.get_logger().warn(f"{'='*60}\n")
-                
+
             except Exception as e:
                 self.get_logger().error(f"❌ Error processing command: {e}")
                 import traceback
@@ -301,6 +354,33 @@ class Lite6FactoryNode(Node):
         
         self._publish_global_status("COMMAND_COMPLETE")
     
+    def _handle_pick_place_for_robot(self, robot_id: str, command: str):
+        """
+        Execute a pick/place command for a specific robot.
+        Sends the command, waits for completion, then publishes a per-robot
+        COMMAND_COMPLETE signal so the super-factory can track each arm independently.
+        """
+        parts = [p.strip() for p in command.split('|')]
+
+        if len(parts) != 3:
+            self.get_logger().error(f"❌ Invalid command format for {robot_id}: {command}")
+            return
+
+        pickup_str = parts[1].strip()
+
+        if not self._validate_robot_access(robot_id, pickup_str):
+            self.get_logger().error(f"❌ {robot_id} cannot access {pickup_str}")
+            return
+
+        self.get_logger().info(f"🎯 {robot_id.upper()} executing pick/place")
+        self._publish_global_status(f"{robot_id.upper()}_EXECUTING")
+
+        self._send_command_to_robot(robot_id, command)
+        self._wait_for_robot_done(robot_id)
+
+        # Per-robot completion signal (e.g. COMMAND_COMPLETE:XARM1)
+        self._publish_global_status(f"COMMAND_COMPLETE:{robot_id.upper()}")
+
     def _parse_robot_id(self, robot_id_str: str) -> str:
         """
         Parse robot ID string to internal robot identifier.

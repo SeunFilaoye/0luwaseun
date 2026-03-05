@@ -179,36 +179,81 @@ class GraphEncoder:
             self.logger.warning("No graph to validate")
             return
 
-        nodes = self.graph['nodes']
-        adjacency = self.graph['adjacency']
+        nodes: Dict[str, Any] = self.graph['nodes']
+        adjacency: Dict[str, List[str]] = self.graph['adjacency']
 
-        # Check for origin nodes
-        origin_nodes = [nid for nid, attrs in nodes.items() if attrs['type'] == 'origin']
+        # Role sets
+        origin_nodes = {nid for nid, attrs in nodes.items() if attrs.get('type') == 'origin'}
+        exit_nodes   = {nid for nid, attrs in nodes.items() if attrs.get('type') == 'exit'}
+
         if not origin_nodes:
             self.logger.warning("⚠️ No origin nodes found in graph")
         else:
             self.logger.info(f"✓ Found {len(origin_nodes)} origin node(s)")
 
-        # Check for exit nodes
-        exit_nodes = [nid for nid, attrs in nodes.items() if attrs['type'] == 'exit']
         if not exit_nodes:
             self.logger.warning("⚠️ No exit nodes found in graph")
         else:
             self.logger.info(f"✓ Found {len(exit_nodes)} exit node(s)")
 
-        # Check for disconnected nodes
-        disconnected = [nid for nid, neighbors in adjacency.items() if not neighbors]
-        if disconnected:
-            self.logger.warning(f"⚠️ Disconnected nodes (no outgoing edges): {disconnected}")
+        # Validate adjacency keys cover all nodes (should be true given how you build it)
+        missing_adj_keys = set(nodes.keys()) - set(adjacency.keys())
+        if missing_adj_keys:
+            self.logger.warning(f"⚠️ Nodes missing from adjacency map: {sorted(missing_adj_keys)}")
 
-        # Check for unreachable nodes (no incoming edges)
-        all_targets = set()
-        for neighbors in adjacency.values():
-            all_targets.update(neighbors)
+        # Build incoming-edge counts and validate edge endpoints exist
+        incoming_count = {nid: 0 for nid in nodes.keys()}
+        bad_edge_endpoints = []
 
-        unreachable = set(nodes.keys()) - all_targets - set(origin_nodes)
-        if unreachable:
-            self.logger.warning(f"⚠️ Unreachable nodes (no incoming edges, not origin): {unreachable}")
+        for from_node, neighbors in adjacency.items():
+            if from_node not in nodes:
+                bad_edge_endpoints.append(f"from={from_node} (unknown)")
+                continue
+            for to_node in neighbors:
+                if to_node not in nodes:
+                    bad_edge_endpoints.append(f"{from_node}->{to_node} (to unknown)")
+                    continue
+                incoming_count[to_node] += 1
+
+        if bad_edge_endpoints:
+            self.logger.warning(f"⚠️ Edges reference unknown node IDs: {bad_edge_endpoints}")
+
+        # 1) "No outgoing edges" is only suspicious for non-exit nodes
+        no_outgoing_non_exit = sorted(
+            nid for nid, nbrs in adjacency.items()
+            if (not nbrs) and (nid in nodes) and (nid not in exit_nodes)
+        )
+        if no_outgoing_non_exit:
+            self.logger.warning(
+                f"⚠️ Nodes with no outgoing edges (non-exit): {no_outgoing_non_exit}"
+            )
+
+        # 2) "No incoming edges" is only allowed for origin nodes
+        no_incoming_non_origin = sorted(
+            nid for nid, cnt in incoming_count.items()
+            if cnt == 0 and nid not in origin_nodes
+        )
+        if no_incoming_non_origin:
+            self.logger.warning(
+                f"⚠️ Nodes with no incoming edges (not origin): {no_incoming_non_origin}"
+            )
+
+        # 3) Exits should generally have at least one incoming edge
+        exits_with_no_incoming = sorted(
+            nid for nid in exit_nodes if incoming_count.get(nid, 0) == 0
+        )
+        if exits_with_no_incoming:
+            self.logger.warning(
+                f"⚠️ Exit nodes have no incoming edges (likely unreachable exits): {exits_with_no_incoming}"
+            )
+
+        # 4) True isolated nodes: no incoming and no outgoing (and not origin by design)
+        isolated = sorted(
+            nid for nid in nodes.keys()
+            if incoming_count.get(nid, 0) == 0 and len(adjacency.get(nid, [])) == 0 and nid not in origin_nodes
+        )
+        if isolated:
+            self.logger.warning(f"⚠️ Isolated nodes (no incoming, no outgoing): {isolated}")
 
     def _log_node_summary(self, nodes: Dict[str, Any]):
         """

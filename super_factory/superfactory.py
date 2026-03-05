@@ -51,7 +51,7 @@ class SuperFactoryNode(Node):
         self.get_logger().info("=" * 70)
 
         # Configuration
-        self.BATCH_SIZE = 5  # Wait for 5 orders before processing
+        self.BATCH_SIZE = 2  # Wait for 2 orders before processing (pairs XARM1+XARM2)
 
         # State management
         self.state = SuperFactoryState.IDLE
@@ -88,6 +88,20 @@ class SuperFactoryNode(Node):
         self.current_task = None
         self.task_ack_received = threading.Event()
         self.task_complete = threading.Event()
+
+        # IR readiness gating for conveyor pickups
+        self.ir_ready_flags = set()
+        self.ir_ready_events = {}
+
+        # Per-robot completion events for parallel route execution
+        self.robot_completion_events = {}  # 'R1' → threading.Event()
+
+        # Per-XARM completion events for parallel XARM execution
+        self.xarm_completion_events = {}  # 'XARM1' → threading.Event()
+
+        # Semaphore ensuring niryo batches run one at a time even when
+        # XARM picks pipeline ahead (prevents cross-batch robot conflicts)
+        self.niryo_batch_semaphore = threading.Semaphore(1)
 
         # Setup communication
         self._setup_communication()
@@ -402,17 +416,68 @@ class SuperFactoryNode(Node):
             self.get_logger().info("📥 ALGORITHM TRAJECTORIES RECEIVED")
             self.get_logger().info("=" * 70)
 
-            # Split by newlines to get individual trajectories
-            trajectories = [t.strip() for t in trajectory_data.split('\n') if t.strip()]
+            lines = [t.strip() for t in trajectory_data.split('\n')]
 
-            self.get_logger().info(f"   Received {len(trajectories)} trajectories")
+            # Separate XARM (pre-separator) commands from per-route niryo chains
+            xarm_tasks = []
+            route_chains = []   # list of lists — each inner list is one route's task sequence
+            current_chain = None
 
-            # Parse and queue trajectories
-            for traj in trajectories:
-                self.get_logger().info(f"   → {traj}")
-                task = self._parse_trajectory(traj)
+            for line in lines:
+                if not line:
+                    continue
+                if line == '---':
+                    current_chain = []
+                    route_chains.append(current_chain)
+                    continue
+                self.get_logger().info(f"   → {line}")
+                task = self._parse_trajectory(line)
                 if task:
-                    self.trajectory_queue.put(task)
+                    if current_chain is not None:
+                        current_chain.append(task)
+                    else:
+                        xarm_tasks.append(task)
+
+            self.get_logger().info(
+                f"   XARM tasks: {len(xarm_tasks)}, "
+                f"Route chains: {len(route_chains)} "
+                f"({[len(c) for c in route_chains]})"
+            )
+
+            # Queue XARM commands as a single parallel meta-task so XARM1 and
+            # XARM2 pick simultaneously.  A single task is queued directly.
+            if len(xarm_tasks) > 1:
+                self.trajectory_queue.put({
+                    'type': 'parallel_xarms',
+                    'tasks': xarm_tasks,
+                    'vendor': 'lite6',
+                    'robot_id': 'XARM_ALL',
+                    'command': 'PARALLEL_XARMS',
+                    'original': 'PARALLEL_XARMS'
+                })
+            elif xarm_tasks:
+                self.trajectory_queue.put(xarm_tasks[0])
+
+            # Queue route chains as a BACKGROUND meta-task (non-blocking).
+            # The niryo_batch_semaphore ensures batches don't overlap even
+            # though the trajectory executor moves on immediately.
+            if route_chains:
+                self.trajectory_queue.put({
+                    'type': 'parallel_routes_bg',
+                    'routes': route_chains,
+                    'vendor': 'meta',
+                    'robot_id': 'N/A',
+                    'command': 'PARALLEL_ROUTES_BG',
+                    'original': 'PARALLEL_ROUTES_BG'
+                })
+            elif not xarm_tasks:
+                # Fallback: no separators in output — put all as flat tasks
+                for line in lines:
+                    if not line:
+                        continue
+                    task = self._parse_trajectory(line)
+                    if task:
+                        self.trajectory_queue.put(task)
 
             self.algorithm_response_received.set()
             self._update_state(SuperFactoryState.EXECUTING_TRAJECTORY)
@@ -427,17 +492,12 @@ class SuperFactoryNode(Node):
         """
         Parse trajectory string into task dictionary.
 
-        Formats:
-        - "XARM1 | PICKUP | ASRS | C1 R5 | PLACE | AGV | A11"
-        - "XARM2 | PICKUP | ASRS | C4 R5 | PLACE | AGV | A11"
-        - "R1 | PICKUP | P12 | DROP | C11"
-
-        We need to convert to vendor factory format:
-        - Lite6: "XARM_1 | PICKUP - ASRS C1 R5 | DROP - AGV A11"
-        - Niryo: "R1 | PICKUP - P12 | DROP - C11"
+        The algorithm already sends commands in vendor format:
+        - Lite6: "XARM1 | PICKUP - ASRS C1 R5 | DROP - CONVEYOR C1"
+        - Niryo: "R2 | PICKUP - C1 | DROP - D23"
 
         Args:
-            trajectory: Trajectory string from algorithm
+            trajectory: Trajectory string from algorithm (already in vendor format)
 
         Returns:
             Task dictionary with vendor, command
@@ -457,11 +517,8 @@ class SuperFactoryNode(Node):
             self.get_logger().error(f"❌ Unknown vendor for robot: {robot_id}")
             return None
 
-        # Convert algorithm format to vendor factory format
-        command = self._convert_to_vendor_format(parts, vendor)
-
-        if not command:
-            return None
+        # Use the trajectory as-is since it's already in vendor format
+        command = trajectory
 
         task = {
             'vendor': vendor,
@@ -472,76 +529,6 @@ class SuperFactoryNode(Node):
 
         return task
 
-    def _convert_to_vendor_format(self, parts: list, vendor: str) -> str:
-        """
-        Convert algorithm format to vendor factory format.
-
-        Algorithm format:
-        ["XARM1", "PICKUP", "ASRS", "C1 R5", "PLACE", "AGV", "A11"]
-        ["R1", "PICKUP", "P12", "DROP", "C11"]
-
-        Vendor format:
-        Lite6: "XARM_1 | PICKUP - ASRS C1 R5 | DROP - AGV A11"
-        Niryo: "R1 | PICKUP - P12 | DROP - C11"
-
-        Args:
-            parts: Split trajectory parts
-            vendor: Vendor name
-
-        Returns:
-            Formatted command string
-        """
-        robot_id = parts[0]
-
-        # Two patterns to handle:
-        # Pattern 1 (Lite6): ROBOT | ACTION1 | LOCATION_TYPE1 | COORDS1 | ACTION2 | LOCATION_TYPE2 | COORDS2
-        # Pattern 2 (Niryo): ROBOT | ACTION1 | LOCATION1 | ACTION2 | LOCATION2
-
-        if vendor == 'lite6':
-            # Expected: ["XARM1", "PICKUP", "ASRS", "C1 R5", "PLACE", "AGV", "A11"]
-            if len(parts) >= 7:
-                action1 = parts[1]
-                loc_type1 = parts[2]
-                coords1 = parts[3]
-                action2 = parts[4]
-                loc_type2 = parts[5]
-                coords2 = parts[6]
-
-                # Convert PICKUP/PLACE to PICKUP/DROP for consistency
-                if action2.upper() == 'PLACE':
-                    action2 = 'DROP'
-
-                # Format: "XARM_1 | PICKUP - ASRS C1 R5 | DROP - AGV A11"
-                command = f"{robot_id} | {action1} - {loc_type1} {coords1} | {action2} - {loc_type2} {coords2}"
-                return command
-
-        elif vendor == 'niryo':
-            # Expected: ["R1", "PICKUP", "P12", "DROP", "C11"]
-            if len(parts) >= 5:
-                action1 = parts[1]
-                loc1 = parts[2]
-                action2 = parts[3]
-                loc2 = parts[4]
-
-                # Format: "R1 | PICKUP - P12 | DROP - C11"
-                command = f"{robot_id} | {action1} - {loc1} | {action2} - {loc2}"
-                return command
-
-        elif vendor == 'agv':
-            # Expected: ["AGV1", "PICKUP", "A", "DROP", "D"]
-            # or: ["AGV1", "PICKUP", "STATION_A", "DROP", "STATION_D"]
-            if len(parts) >= 5:
-                action1 = parts[1]
-                loc1 = parts[2]
-                action2 = parts[3]
-                loc2 = parts[4]
-
-                # Format: "AGV1 | PICKUP - A | DROP - D"
-                command = f"{robot_id} | {action1} - {loc1} | {action2} - {loc2}"
-                return command
-
-        self.get_logger().error(f"❌ Failed to convert trajectory to {vendor} format")
-        return None
 
     def _extract_vendor_from_robot_id(self, robot_id: str) -> str:
         """
@@ -607,8 +594,27 @@ class SuperFactoryNode(Node):
                 self.get_logger().info(f"   Robot: {task['robot_id']}")
                 self.get_logger().info(f"   Command: {task['command']}")
 
-                # Execute task with timeout
-                success = self._execute_task(task)
+                # Execute task
+                task_type = task.get('type')
+                if task_type == 'parallel_xarms':
+                    success = self._execute_parallel_xarms(task['tasks'])
+                elif task_type == 'parallel_routes_bg':
+                    # Fire niryo chains in a background thread serialized by
+                    # the semaphore — the executor moves on immediately so the
+                    # next batch's XARM picks can start without waiting for niryo.
+                    routes = task['routes']
+                    def _run_niryo_bg(routes=routes):
+                        self.niryo_batch_semaphore.acquire()
+                        try:
+                            self._execute_parallel_routes(routes)
+                        finally:
+                            self.niryo_batch_semaphore.release()
+                    threading.Thread(target=_run_niryo_bg, daemon=True).start()
+                    success = True
+                elif task_type == 'parallel_routes':
+                    success = self._execute_parallel_routes(task['routes'])
+                else:
+                    success = self._execute_task(task)
 
                 if success:
                     self.get_logger().info("=" * 70)
@@ -635,6 +641,89 @@ class SuperFactoryNode(Node):
                 import traceback
                 self.get_logger().error(traceback.format_exc())
 
+    def _execute_parallel_routes(self, routes: list) -> bool:
+        """
+        Execute multiple independent route chains in parallel threads.
+        Each chain is a list of tasks that must run sequentially within the chain.
+        Returns True if all chains complete successfully.
+        """
+        if not routes:
+            return True
+
+        self.get_logger().info(f"🔀 Launching {len(routes)} route chains in parallel")
+
+        results = [None] * len(routes)
+        threads = []
+
+        def run_chain(idx, tasks):
+            success = True
+            for task in tasks:
+                if not success:
+                    break
+                ok = self._execute_task(task)
+                if not ok:
+                    success = False
+                    self.get_logger().error(
+                        f"❌ Route chain {idx} failed at: {task.get('command', '?')}"
+                    )
+            results[idx] = success
+
+        for i, route_tasks in enumerate(routes):
+            t = threading.Thread(target=run_chain, args=(i, route_tasks), daemon=True)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        all_ok = all(r is True for r in results)
+        if all_ok:
+            self.get_logger().info("✅ All parallel route chains completed")
+        else:
+            self.get_logger().error("❌ One or more route chains failed")
+        return all_ok
+
+    def _execute_parallel_xarms(self, tasks: list) -> bool:
+        """
+        Send XARM1 and XARM2 pick commands in parallel and wait for both to
+        complete via per-robot completion events.  lite6_factory publishes
+        COMMAND_COMPLETE:XARM1 / COMMAND_COMPLETE:XARM2 when each arm finishes.
+        """
+        if not tasks:
+            return True
+
+        self.get_logger().info(f"🔀 Launching {len(tasks)} XARM commands in parallel")
+
+        results = [None] * len(tasks)
+        threads = []
+
+        def run_xarm(idx, task):
+            robot_id = task['robot_id'].upper()  # XARM1 or XARM2
+            if robot_id not in self.xarm_completion_events:
+                self.xarm_completion_events[robot_id] = threading.Event()
+            evt = self.xarm_completion_events[robot_id]
+            evt.clear()
+            self._send_vendor_command(task['vendor'], task['command'])
+            ok = evt.wait(timeout=120.0)
+            results[idx] = ok
+            if not ok:
+                self.get_logger().error(f"❌ Timeout waiting for {robot_id} completion")
+
+        for i, task in enumerate(tasks):
+            t = threading.Thread(target=run_xarm, args=(i, task), daemon=True)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        all_ok = all(r is True for r in results)
+        if all_ok:
+            self.get_logger().info("✅ All XARM tasks completed")
+        else:
+            self.get_logger().error("❌ One or more XARM tasks timed out")
+        return all_ok
+
     def _execute_task(self, task: dict, ack_timeout: float = 10.0,
                      complete_timeout: float = 120.0) -> bool:
         """
@@ -651,33 +740,94 @@ class SuperFactoryNode(Node):
         vendor = task['vendor']
         command = task['command']
 
-        # Reset event flags
-        self.task_ack_received.clear()
-        self.task_complete.clear()
+        # If this is a Niryo pickup from conveyor, wait for IR readiness
+        if vendor == 'niryo':
+            ready_key = self._get_ir_ready_key_from_command(command)
+            if ready_key:
+                self.get_logger().info(f"⏳ Waiting for IR_READY: {ready_key}...")
+                if ready_key not in self.ir_ready_events:
+                    self.ir_ready_events[ready_key] = threading.Event()
+                # Check if IR already fired before this task was dequeued
+                if ready_key in self.ir_ready_flags:
+                    self.ir_ready_flags.discard(ready_key)
+                    self.ir_ready_events[ready_key].clear()
+                    self.get_logger().info(f"✅ IR already triggered for {ready_key}, proceeding")
+                else:
+                    self.ir_ready_events[ready_key].clear()
+                    self.ir_ready_events[ready_key].wait(timeout=complete_timeout)
+                    if ready_key in self.ir_ready_flags:
+                        self.ir_ready_flags.discard(ready_key)
+                        self.ir_ready_events[ready_key].clear()
+                    else:
+                        self.get_logger().error(f"❌ IR readiness timeout for {ready_key}")
+                        return False
 
         # Step 1: Send command to vendor factory
         self._send_vendor_command(vendor, command)
 
-        # Step 2: Wait for ACK
-        self.get_logger().info(f"⏳ Waiting for ACK from {vendor}...")
-        ack_received = self.task_ack_received.wait(timeout=ack_timeout)
-
-        if not ack_received:
-            self.get_logger().error(f"❌ ACK timeout from {vendor} after {ack_timeout}s")
-            return False
-
-        self.get_logger().info(f"✅ ACK received from {vendor}")
-
-        # Step 3: Wait for COMPLETE
-        self.get_logger().info(f"⏳ Waiting for task completion from {vendor}...")
-
-        complete_received = self.task_complete.wait(timeout=complete_timeout)
-
-        if not complete_received:
-            self.get_logger().error(f"❌ Task completion timeout from {vendor}")
-            return False
+        # Step 2 & 3: Wait for completion
+        robot_id = task.get('robot_id', '').upper()
+        if vendor == 'niryo' and robot_id.startswith('R'):
+            # Per-robot completion event — supports parallel route execution
+            if robot_id not in self.robot_completion_events:
+                self.robot_completion_events[robot_id] = threading.Event()
+            self.robot_completion_events[robot_id].clear()
+            self.get_logger().info(f"⏳ Waiting for {robot_id} to complete...")
+            complete_received = self.robot_completion_events[robot_id].wait(timeout=complete_timeout)
+            if not complete_received:
+                self.get_logger().error(f"❌ Per-robot completion timeout for {robot_id}")
+                return False
+            self.get_logger().info(f"✅ {robot_id} completed")
+        else:
+            # Generic ACK + completion for lite6 / AGV
+            self.task_ack_received.clear()
+            self.task_complete.clear()
+            self.get_logger().info(f"⏳ Waiting for ACK from {vendor}...")
+            ack_received = self.task_ack_received.wait(timeout=ack_timeout)
+            if not ack_received:
+                self.get_logger().error(f"❌ ACK timeout from {vendor} after {ack_timeout}s")
+                return False
+            self.get_logger().info(f"✅ ACK received from {vendor}")
+            self.get_logger().info(f"⏳ Waiting for task completion from {vendor}...")
+            complete_received = self.task_complete.wait(timeout=complete_timeout)
+            if not complete_received:
+                self.get_logger().error(f"❌ Task completion timeout from {vendor}")
+                return False
 
         return True
+
+    def _get_ir_ready_key_from_command(self, command: str):
+        """
+        Determine if a Niryo command should wait for IR readiness.
+        Returns key "R3:P11" or None if no gating needed.
+        """
+        try:
+            parts = [p.strip() for p in command.split('|')]
+            if len(parts) < 3:
+                return None
+
+            robot_id = parts[0].strip().upper()
+
+            pickup_part = None
+            for p in parts[1:]:
+                if 'PICKUP' in p.upper():
+                    pickup_part = p
+                    break
+
+            if not pickup_part:
+                return None
+
+            # Parse pickup location
+            pickup = pickup_part.upper().replace('PICKUP', '').replace('-', '').strip()
+            # Keep only token like P11/P12/P13
+            pickup = pickup.split()[0]
+
+            # Only gate known conveyor pickups
+            conveyor_gates = {'R1:P11', 'R1:P12', 'R2:P13', 'R3:P14', 'R4:P15', 'R4:P16', 'R5:P17', 'R6:P18'}
+            key = f"{robot_id}:{pickup}"
+            return key if key in conveyor_gates else None
+        except Exception:
+            return None
 
     def _send_vendor_command(self, vendor: str, command: str):
         """
@@ -720,6 +870,7 @@ class SuperFactoryNode(Node):
         Expected status messages:
         - "COMMAND_COMPLETE"
         - "ROBOT_X_EXECUTING"
+        - "READY" - Part loaded/unloaded, AGV can proceed
         - etc.
 
         Args:
@@ -729,9 +880,142 @@ class SuperFactoryNode(Node):
         status_msg = msg.data
         self.get_logger().info(f"📊 Status from {vendor}: {status_msg}")
 
-        # Check for completion
+        # Per-robot completion for niryo parallel routes (COMMAND_COMPLETE:R1)
+        if vendor == 'niryo' and 'COMMAND_COMPLETE:' in status_msg.upper():
+            rid = status_msg.split(':', 1)[1].strip().upper()
+            if rid in self.robot_completion_events:
+                self.robot_completion_events[rid].set()
+
+        # Per-XARM completion for parallel_xarms execution (COMMAND_COMPLETE:XARM1/2)
+        if vendor == 'lite6' and 'COMMAND_COMPLETE:' in status_msg.upper():
+            rid = status_msg.split(':', 1)[1].strip().upper()  # e.g. XARM1
+            if rid in self.xarm_completion_events:
+                self.xarm_completion_events[rid].set()
+                self.get_logger().info(f"✅ XARM completion received for {rid}")
+
+        # Check for generic completion (lite6 / AGV)
         if 'COMPLETE' in status_msg.upper():
             self.task_complete.set()
+
+        # Handle AGV arrival events
+        if vendor == 'agv' and status_msg.upper().startswith('AGV_ARRIVED'):
+            self._handle_agv_arrival(status_msg)
+
+        # Handle IR readiness events from Niryo factory
+        if vendor == 'niryo' and status_msg.upper().startswith('IR_READY'):
+            self._handle_ir_ready(status_msg)
+
+        # Route READY messages to AGV factory for coordination
+        # Lite6 (Xarm) sends READY when part is loaded onto AGV (READY_XARM1/2)
+        # Niryo (Ned2) sends READY when part is picked from AGV (READY)
+        if vendor == 'lite6':
+            if 'READY' in status_msg.upper() and not status_msg.upper().startswith('IR_READY'):
+                self._route_ready_to_agv(vendor, status_msg)
+        elif vendor == 'niryo':
+            if status_msg.strip().upper() == 'READY':
+                self._route_ready_to_agv(vendor, status_msg)
+
+    def _handle_ir_ready(self, status_msg: str):
+        """
+        Handle IR readiness status from Niryo factory.
+
+        Expected format:
+        "IR_READY | R3 | P11 | C3"
+        """
+        parts = [p.strip() for p in status_msg.split('|')]
+        if len(parts) < 3:
+            self.get_logger().warn(f"⚠️ Invalid IR_READY status: {status_msg}")
+            return
+
+        robot_id = parts[1].upper()
+        pickup = parts[2].upper()
+        key = f"{robot_id}:{pickup}"
+
+        self.ir_ready_flags.add(key)
+        if key in self.ir_ready_events:
+            self.ir_ready_events[key].set()
+
+        self.get_logger().info(f"✅ IR ready for {key}")
+
+    def _handle_agv_arrival(self, status_msg: str):
+        """
+        Handle AGV arrival status and dispatch Niryo task.
+
+        Expected format:
+        "AGV_ARRIVED | agv_1 | Alvik1 | D"
+        """
+        parts = [p.strip() for p in status_msg.split('|')]
+        if len(parts) < 4:
+            self.get_logger().warn(f"⚠️ Invalid AGV_ARRIVED status: {status_msg}")
+            return
+
+        agv_id = parts[1]
+        hw_name = parts[2]
+        position = parts[3].upper()
+
+        self.get_logger().info(f"✅ {hw_name} is at {position} (from {agv_id})")
+
+        # Trigger Niryo robot 6 to pick from AGV and drop to D12
+        if 'niryo' not in self.command_publishers:
+            self.get_logger().warn("Niryo factory not configured, cannot dispatch R6")
+            return
+
+        # Map destination to pickup/drop positions for R6
+        # D11 = blue bin in robot_6's config
+        if position == 'D':
+            pickup = 'P12'
+            drop = 'D11'
+        elif position == 'E':
+            pickup = 'P13'
+            drop = 'D11'
+        else:
+            self.get_logger().warn(f"Unsupported AGV destination: {position}")
+            return
+
+        niryo_command = f"R6 | PICKUP - {pickup} | DROP - {drop}"
+        msg = String()
+        msg.data = niryo_command
+        self.command_publishers['niryo'].publish(msg)
+
+        self.get_logger().info(f"📤 Sent to niryo: {niryo_command}")
+
+    def _route_ready_to_agv(self, source_vendor: str, status_msg: str):
+        """
+        Route READY signals from robot factories to AGV factory.
+
+        This enables coordination between robots:
+        - Lite6 (Xarm) sends READY after loading part onto AGV → AGV can move to destination
+        - Niryo (Ned2) sends READY after picking part from AGV → AGV can return to queue
+
+        Args:
+            source_vendor: Vendor that sent the READY signal ('lite6' or 'niryo')
+            status_msg: Original status message
+        """
+        if 'agv' not in self.command_publishers:
+            self.get_logger().warn("AGV factory not configured, cannot route READY signal")
+            return
+
+        # Determine the type of READY signal based on source
+        if source_vendor == 'lite6':
+            # Xarm finished loading part onto AGV - AGV can move to destination
+            ready_command = 'READY_TO_MOVE'
+            self.get_logger().info(f"🔄 Routing READY from Xarm → AGV can move to destination")
+
+        elif source_vendor == 'niryo':
+            # Ned2 finished picking part from AGV - AGV can return to queue
+            ready_command = 'READY_TO_RETURN'
+            self.get_logger().info(f"🔄 Routing READY from Ned2 → AGV can return to queue")
+
+        else:
+            self.get_logger().debug(f"Ignoring READY from {source_vendor} (not routed to AGV)")
+            return
+
+        # Send command to AGV factory
+        msg = String()
+        msg.data = ready_command
+        self.command_publishers['agv'].publish(msg)
+
+        self.get_logger().info(f"📤 Sent {ready_command} to AGV factory")
 
     # ==================== STATE AND STATUS ====================
 

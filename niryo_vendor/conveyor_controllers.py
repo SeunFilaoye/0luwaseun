@@ -94,7 +94,7 @@ class ConveyorController(Node):
         self.startup_conveyor()
         
         # Start monitoring thread
-        #self.start_monitoring_thread()
+        self.start_monitoring_thread()
         
         self.get_logger().info(
             f"✅ Conveyor {conveyor_id} Controller initialized"
@@ -360,117 +360,174 @@ class ConveyorController(Node):
     def check_ir_sensor(self, sensor_pin):
         """
         Check IR sensor state.
-        
+
         Args:
             sensor_pin (str): Sensor pin name (e.g., "DI5")
-            
+
         Returns:
             bool: True if object detected, False otherwise
         """
         try:
+            self.get_logger().debug(
+                f"🔍 Conveyor {self.conveyor_id}: Calling GetDigitalIO service for {sensor_pin}..."
+            )
+
             req = GetDigitalIO.Request()
             req.name = sensor_pin
-            
+
             future = self.ir_client.call_async(req)
             rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
-            
+
             if future.done():
                 result = future.result()
                 if result:
                     # Niryo sensor: False = object detected, True = no object
-                    object_detected = not result.value
+                    raw_value = result.value
+                    object_detected = not raw_value
+
+                    self.get_logger().debug(
+                        f"✅ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
+                        f"raw_value={raw_value}, object_detected={object_detected}"
+                    )
+
                     return object_detected
-            
+                else:
+                    self.get_logger().warn(
+                        f"⚠️ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
+                        f"service returned None result"
+                    )
+            else:
+                self.get_logger().warn(
+                    f"⚠️ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
+                    f"service call timeout (not done)"
+                )
+
             return False
-            
+
         except Exception as e:
             self.get_logger().error(
                 f"❌ Conveyor {self.conveyor_id}: Sensor {sensor_pin} check failed: {e}"
             )
+            import traceback
+            traceback.print_exc()
             return False
     
     def start_monitoring_thread(self):
         """Start independent monitoring thread for this conveyor."""
+        self.get_logger().info(
+            f"🚀 Conveyor {self.conveyor_id}: Creating monitoring thread..."
+        )
+
         self.monitor_thread = threading.Thread(
             target=self.ir_monitoring_loop,
             daemon=True
         )
         self.monitor_thread.start()
-        
+
         self.get_logger().info(
-            f"👁️ Conveyor {self.conveyor_id}: Monitoring thread started"
+            f"👁️ Conveyor {self.conveyor_id}: Monitoring thread started (is_alive={self.monitor_thread.is_alive()})"
         )
     
     def ir_monitoring_loop(self):
         """
         Main monitoring loop - runs in dedicated thread.
-        
+
         Monitors IR sensor at 50 Hz (20ms intervals) and handles:
         - Object detection (stop conveyor, send trigger)
         - Object removal (start conveyor)
         """
         self.get_logger().info(
-            f"🔍 Conveyor {self.conveyor_id}: Monitoring started at 50 Hz"
+            f"🔍 Conveyor {self.conveyor_id}: Monitoring loop STARTED - thread is running"
         )
-        
+
+        loop_count = 0
         while not self.shutdown_flag:
             try:
+                loop_count += 1
+
+                # Log every 50 iterations (every 1 second at 50Hz)
+                if loop_count % 50 == 0:
+                    self.get_logger().info(
+                        f"🔄 Conveyor {self.conveyor_id}: Monitoring loop running (iteration {loop_count})"
+                    )
+
                 # Get current state safely
                 with self.state_lock:
                     last_state = self.last_ir_state
                     direction = self.current_direction
-                
+
                 # Check appropriate sensor for current direction
                 sensor_config = self.get_current_sensor_config()
+
+                self.get_logger().debug(
+                    f"📍 Conveyor {self.conveyor_id}: Checking sensor {sensor_config['pin']} (iteration {loop_count})"
+                )
+
                 current_ir_state = self.check_ir_sensor(sensor_config['pin'])
+
+                self.get_logger().debug(
+                    f"📊 Conveyor {self.conveyor_id}: Sensor read - pin={sensor_config['pin']}, "
+                    f"state={current_ir_state}, last_state={last_state}"
+                )
                 
                 # Process state changes
                 if current_ir_state != last_state:
                     timestamp = time.time()
-                    
+
+                    self.get_logger().info(
+                        f"🔄 Conveyor {self.conveyor_id}: STATE CHANGE DETECTED - "
+                        f"last_state={last_state} → current_state={current_ir_state}"
+                    )
+
                     if current_ir_state:
                         # Object detected - stop conveyor and trigger
                         self.get_logger().info(
                             f"🛑 Conveyor {self.conveyor_id}: Object detected on "
                             f"{sensor_config['pin']} ({direction} direction)"
                         )
-                        
+
                         if self.control_conveyor(False):
                             self.send_ir_trigger(timestamp, sensor_config)
                         else:
                             self.get_logger().error(
                                 f"❌ Conveyor {self.conveyor_id}: Failed to stop"
                             )
-                    
+
                     else:
                         # Object removed - start conveyor
                         self.get_logger().info(
                             f"✅ Conveyor {self.conveyor_id}: Object removed from "
                             f"{sensor_config['pin']} ({direction} direction)"
                         )
-                        
+
                         if not self.control_conveyor(True):
                             self.get_logger().error(
                                 f"❌ Conveyor {self.conveyor_id}: Failed to start"
                             )
-                    
+
                     # Update state
                     with self.state_lock:
                         self.last_ir_state = current_ir_state
-                
+
                 # Fast polling - 50 Hz
                 time.sleep(0.02)
-                
+
             except Exception as e:
                 self.get_logger().error(
                     f"❌ Conveyor {self.conveyor_id}: Monitoring error: {e}"
                 )
+                import traceback
+                traceback.print_exc()
                 time.sleep(0.5)
+
+        self.get_logger().info(
+            f"🛑 Conveyor {self.conveyor_id}: Monitoring loop EXITED (shutdown_flag={self.shutdown_flag})"
+        )
     
     def send_ir_trigger(self, timestamp, sensor_config):
         """
         Publish IR trigger event to Factory Node.
-        
+
         Message format (JSON):
         {
             'conveyor_id': int,
@@ -480,7 +537,7 @@ class ConveyorController(Node):
             'pickup_position': str,
             'sensor_pin': str
         }
-        
+
         Args:
             timestamp (float): Event timestamp
             sensor_config (dict): Current sensor configuration
@@ -493,13 +550,18 @@ class ConveyorController(Node):
             'pickup_position': sensor_config['pickup_position'],
             'sensor_pin': sensor_config['pin']
         }
-        
+
+        self.get_logger().info(
+            f"📡 Conveyor {self.conveyor_id}: PUBLISHING IR trigger to topic "
+            f"'/niryo_factory/conveyor_{self.conveyor_id}/ir_trigger'"
+        )
+
         msg = String()
         msg.data = json.dumps(trigger_data)
         self.ir_trigger_pub.publish(msg)
-        
+
         self.get_logger().info(
-            f"📡 Conveyor {self.conveyor_id}: IR trigger sent → "
+            f"✅ Conveyor {self.conveyor_id}: IR trigger PUBLISHED → "
             f"Robot R{sensor_config['triggers_robot']} at {sensor_config['pickup_position']} "
             f"({self.current_direction} direction)"
         )
@@ -507,7 +569,7 @@ class ConveyorController(Node):
     def publish_status(self):
         """
         Publish status update to Factory Node.
-        
+
         Message format (JSON):
         {
             'conveyor_id': int,
@@ -522,7 +584,7 @@ class ConveyorController(Node):
         }
         """
         sensor_config = self.get_current_sensor_config()
-        
+
         with self.state_lock:
             status_data = {
                 'conveyor_id': self.conveyor_id,
@@ -535,10 +597,15 @@ class ConveyorController(Node):
                 'bidirectional': self.bidirectional,
                 'timestamp': time.time()
             }
-        
+
         msg = String()
         msg.data = json.dumps(status_data)
         self.status_pub.publish(msg)
+
+        self.get_logger().debug(
+            f"📡 Conveyor {self.conveyor_id}: Published status - "
+            f"running={status_data['running']}, ir_state={status_data['ir_state']}"
+        )
     
     def control_command_callback(self, msg):
         """
@@ -688,10 +755,14 @@ def main(args=None):
         config_path = sys.argv[2]
     
     rclpy.init(args=args)
-    
+
     try:
+        print(f"\n{'='*70}")
+        print(f"🚀 Starting Conveyor {conveyor_id} Controller")
+        print(f"{'='*70}\n")
+
         controller = ConveyorController(conveyor_id, config_path)
-        
+
         controller.get_logger().info(
             f"🎯 Conveyor {conveyor_id} Controller ready"
         )
@@ -701,11 +772,25 @@ def main(args=None):
         controller.get_logger().info(
             f"🔒 Independent operation - no shared state"
         )
-        
+
         # Print status
         status = controller.get_status_dict()
         controller.get_logger().info(f"📋 Initial status: {json.dumps(status, indent=2)}")
-        
+
+        # Check if monitoring thread is alive
+        if hasattr(controller, 'monitor_thread'):
+            controller.get_logger().info(
+                f"🧵 Monitoring thread status: is_alive={controller.monitor_thread.is_alive()}"
+            )
+        else:
+            controller.get_logger().error(
+                f"❌ Monitoring thread was not created!"
+            )
+
+        controller.get_logger().info(
+            f"♻️ Entering main spin loop..."
+        )
+
         rclpy.spin(controller)
         
     except KeyboardInterrupt:

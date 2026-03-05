@@ -100,11 +100,18 @@ xarm1:
   
   # ==================== OPERATING PARAMETERS ====================
   operating_parameters:
-    default_speed: 30.0       # Default joint speed (deg/sec or %)
-    default_acceleration: 100.0  # Default acceleration
-    safe_speed: 20.0          # Safe/slow speed for critical operations
-    vacuum_activation_time: 0.5  # Time to wait after vacuum activation (seconds)
-    position_settling_time: 0.5  # Time to wait after reaching position (seconds)
+    # Joint Motion Parameters (used with move_joint, set_servo_angle)
+    joint_speed_deg: 120.0            # Joint speed in deg/s [min: 0.0, max: 180.0]
+    joint_acceleration_deg: 2500.0    # Joint acceleration in deg/s² [min: 1.0, max: 5000.0]
+
+    # TCP/Cartesian Motion Parameters (used with set_position, move_line)
+    tcp_speed_mm: 150.0              # TCP linear speed in mm/s [min: 0.1, max: 1000.0]
+    tcp_acceleration_mm: 2000.0      # TCP linear acceleration in mm/s² [min: 1.0, max: 50000.0]
+    
+    # Timing Parameters
+    vacuum_activation_time: 0.25      # Time to wait after vacuum ON (seconds) [min: 0.1, max: 2.0]
+    vacuum_deactivation_time: 0.25    # Time to wait after vacuum OFF (seconds) [min: 0.1, max: 1.0]
+    position_settling_time: 0.25      # Time to wait after reaching position (seconds) [min: 0.1, max: 2.0]
 
 
 xarm2:
@@ -197,11 +204,33 @@ xarm2:
   
   # ==================== OPERATING PARAMETERS ====================
   operating_parameters:
-    default_speed: 30.0       # Default joint speed (deg/sec or %)
-    default_acceleration: 100.0  # Default acceleration
-    safe_speed: 20.0          # Safe/slow speed for critical operations
-    vacuum_activation_time: 0.5  # Time to wait after vacuum activation (seconds)
-    position_settling_time: 0.5  # Time to wait after reaching position (seconds)
+    # Joint Motion Parameters (used with move_joint, set_servo_angle)
+    joint_speed_deg: 120.0            # Joint speed in deg/s [min: 0.0, max: 180.0]
+    joint_speed_rad: 0.873           # Joint speed in rad/s [min: 0.0, max: 3.14]
+    joint_acceleration_deg: 2500.0    # Joint acceleration in deg/s² [min: 1.0, max: 5000.0]
+    joint_acceleration_rad: 8.73     # Joint acceleration in rad/s² [min: 0.017, max: 87.3]
+    joint_jerk_rad: 200.0            # Joint jerk in rad/s³ [min: 0.0, max: 500.0]
+
+    # TCP/Cartesian Motion Parameters (used with set_position, move_line)
+    tcp_speed_mm: 200.0              # TCP linear speed in mm/s [min: 0.1, max: 1000.0]
+    tcp_acceleration_mm: 25000.0      # TCP linear acceleration in mm/s² [min: 1.0, max: 50000.0]
+    tcp_jerk_mm: 800.0              # TCP jerk in mm/s³ [min: 0.0, max: 10000.0]
+
+    # Operational Speed Profiles (as percentage of max or absolute values)
+    fast_transit_speed: 100.0        # Fast movement speed in mm/s [recommended: 100-200]
+    normal_operation_speed: 100.0     # Standard pick/place speed in mm/s [recommended: 50-100]
+    precise_placement_speed: 75.0    # Slow/precise speed in mm/s [recommended: 20-50]
+    teaching_mode_speed: 10.0        # Manual teaching speed in mm/s [recommended: 5-20]
+
+    # Timing Parameters
+    vacuum_activation_time: 0.25      # Time to wait after vacuum ON (seconds) [min: 0.1, max: 2.0]
+    vacuum_deactivation_time: 0.25    # Time to wait after vacuum OFF (seconds) [min: 0.1, max: 1.0]
+    position_settling_time: 0.25      # Time to wait after reaching position (seconds) [min: 0.1, max: 2.0]
+
+    # Blending/Rounding Parameters
+    default_blend_radius: 5.0        # Default blend radius in mm [min: 0.0, max: 1000.0, 0=sharp corner]
+    precise_blend_radius: 2.0        # Precise blend radius in mm [recommended: 1-5]
+    fast_blend_radius: 10.0          # Fast blend radius in mm [recommended: 5-20]
 
 
 # ==================== SYSTEM METADATA ====================
@@ -249,9 +278,9 @@ metadata:
   
   # ==================== SPEED RECOMMENDATIONS ====================
   speed_guidelines:
-    fast_transit: 50.0      # For movements far from obstacles
-    normal_operation: 30.0  # Standard pick/place operations
-    precise_placement: 20.0 # Near ASRS slots or AGV
+    fast_transit: 100.0      # For movements far from obstacles
+    normal_operation: 75.0  # Standard pick/place operations
+    precise_placement: 50.0 # Near ASRS slots or AGV
     teaching_mode: 10.0     # For manual teaching
   
   # ==================== COMMAND FORMAT ====================

@@ -68,7 +68,10 @@ class ActionMapper:
         self.logger.info("🔧 DECODING TRAJECTORIES TO VENDOR COMMANDS")
         self.logger.info("=" * 70)
 
-        all_commands = []
+        xarm_commands = []   # XARM pick commands — run first so both arms start together
+        # Per-route downstream chains: order_key → [commands]
+        # Kept in insertion order so the output is deterministic
+        route_chains = {}
         edge_mappings = node_mapping.get('edge_mappings', [])
 
         # Create order_id to part_id mapping
@@ -79,6 +82,7 @@ class ActionMapper:
 
         for order_key, node_sequence in trajectories.items():
             self.logger.info(f"\nDecoding {order_key}: {' → '.join(node_sequence)}")
+            route_chains[order_key] = []
 
             part_id = order_to_part.get(order_key)
             if not part_id:
@@ -118,14 +122,34 @@ class ActionMapper:
                     to_node
                 )
 
-                all_commands.append(command)
-                self.logger.info(f"   {from_node} → {to_node}: {command}")
+                # XARM commands go first; downstream commands grouped per route
+                vendor = edge_mapping.get('vendor', '')
+                if vendor == 'lite6':
+                    xarm_commands.append(command)
+                    self.logger.info(f"   {from_node} → {to_node}: {command} [XARM - runs first]")
+                else:
+                    route_chains[order_key].append(command)
+                    self.logger.info(f"   {from_node} → {to_node}: {command}")
 
-        # Join all commands with newlines
-        result = '\n'.join(all_commands)
+        # Build output:
+        #   XARM commands first (sequential)
+        #   Then each route chain separated by '---' (executed in parallel by superfactory)
+        all_parts = list(xarm_commands)
+        for order_key in sorted(route_chains.keys()):
+            cmds = route_chains[order_key]
+            if cmds:
+                all_parts.append('---')
+                all_parts.extend(cmds)
 
+        result = '\n'.join(all_parts)
+
+        cmd_count = len([p for p in all_parts if p != '---'])
+        chain_count = sum(1 for c in route_chains.values() if c)
         self.logger.info("=" * 70)
-        self.logger.info(f"✅ DECODING COMPLETE: {len(all_commands)} commands generated")
+        self.logger.info(
+            f"✅ DECODING COMPLETE: {cmd_count} commands in "
+            f"{len(xarm_commands)} XARM + {chain_count} route chain(s)"
+        )
         self.logger.info("=" * 70)
 
         return result
@@ -222,7 +246,8 @@ class ActionMapper:
             self.logger.warning("⚠️ No commands generated")
             return False
 
-        command_list = commands.split('\n')
+        # Skip route-separator lines ('---') added for parallel execution grouping
+        command_list = [c for c in commands.split('\n') if c.strip() and c.strip() != '---']
         self.logger.info(f"Validating {len(command_list)} commands...")
 
         for i, cmd in enumerate(command_list, 1):

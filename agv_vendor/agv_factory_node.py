@@ -68,9 +68,19 @@ class AGVFactoryNode(Node):
                 'last_update': 0.0
             }
 
+        # Track last arrival positions to avoid duplicate arrival notifications
+        self._last_arrival_position: Dict[str, Optional[str]] = {}
+        for agv_id in self.agv_ids:
+            self._last_arrival_position[f'agv_{agv_id}'] = None
+
         # Current service tracking
         self.current_service_agv: Optional[str] = None
         self.current_destination: Optional[str] = None
+
+        # READY signal synchronization events
+        # These are set when superfactory routes READY from other factories
+        self.ready_to_move_event = threading.Event()
+        self.ready_to_return_event = threading.Event()
 
         # Setup communication
         self._setup_topics()
@@ -219,12 +229,37 @@ class AGVFactoryNode(Node):
                 self.get_logger().info(f"[{agv_id}] {state} @ {position}")
                 self._last_logged_state[agv_id] = state
 
-                # Check if a command completed
-                if state == 'IDLE' and self.current_service_agv == agv_id:
-                    self.get_logger().info(f"[{agv_id}] Service complete, returned to queue")
-                    self._publish_global_status("COMMAND_COMPLETE")
-                    self.current_service_agv = None
-                    self.current_destination = None
+            # Notify superfactory on AGV arrival at destination (D/E)
+            arrival_states = {'ARRIVED', 'WAITING_UNLOAD'}
+            if position in self.destinations and state in arrival_states:
+                if self._last_arrival_position.get(agv_id) != position:
+                    hw_name = self._get_agv_hw_name(agv_id)
+                    self._publish_global_status(
+                        f"AGV_ARRIVED | {agv_id} | {hw_name} | {position}"
+                    )
+                    self._last_arrival_position[agv_id] = position
+                # If no current service AGV is set, set it so READY_TO_RETURN can act
+                if not self.current_service_agv:
+                    self.current_service_agv = agv_id
+                    self.current_destination = position
+            else:
+                # Clear arrival marker once AGV leaves destination
+                if position not in self.destinations:
+                    self._last_arrival_position[agv_id] = None
+
+                # Handle state transitions for current service AGV
+                if self.current_service_agv == agv_id:
+                    # AGV arrived at destination and waiting for unload
+                    if state == 'WAITING_UNLOAD':
+                        self.get_logger().info(f"[{agv_id}] At destination, waiting for Ned2 to pick part...")
+                        self._publish_global_status("AGV_WAITING_FOR_UNLOAD")
+
+                    # Check if a command completed (AGV returned to queue)
+                    elif state == 'IDLE':
+                        self.get_logger().info(f"[{agv_id}] Service complete, returned to queue")
+                        self._publish_global_status("COMMAND_COMPLETE")
+                        self.current_service_agv = None
+                        self.current_destination = None
 
         except json.JSONDecodeError:
             # Fallback for non-JSON status
@@ -320,6 +355,13 @@ class AGVFactoryNode(Node):
             except (ValueError, IndexError) as e:
                 self.get_logger().error(f"Failed to parse AGV ID: {e}")
 
+        # ==================== READY SIGNALS FROM SUPERFACTORY ====================
+        elif command_upper == 'READY_TO_MOVE':
+            self._handle_ready_to_move()
+
+        elif command_upper == 'READY_TO_RETURN':
+            self._handle_ready_to_return()
+
         # ==================== PICK/PLACE OPERATIONS ====================
         elif '|' in command and 'PICKUP' in command_upper and 'DROP' in command_upper:
             self._handle_pick_place_command(command)
@@ -350,6 +392,131 @@ class AGVFactoryNode(Node):
 
         self._publish_global_status("ALL_AGVS_READY")
         self.get_logger().info("All AGVs initialized")
+
+    # ==================== READY SIGNAL HANDLERS ====================
+
+    def _handle_ready_to_move(self):
+        """
+        Handle READY_TO_MOVE signal from superfactory.
+        This is routed from Lite6/Xarm when it finishes loading a part onto the AGV.
+        """
+        self.get_logger().info("=" * 60)
+        self.get_logger().info("READY_TO_MOVE received from superfactory")
+        self.get_logger().info("   (Xarm finished loading part onto AGV)")
+        self.get_logger().info("=" * 60)
+
+        # Set the event so _pick_up_and_deliver can detect pre-received READY
+        self.ready_to_move_event.set()
+
+        # If an AGV is already in service and waiting for load, send ready immediately
+        if self.current_service_agv:
+            agv_status = self.agv_detailed_status.get(self.current_service_agv, {})
+            current_state = agv_status.get('state', 'UNKNOWN')
+
+            if current_state == 'WAITING_LOAD':
+                self.get_logger().info(f"   Sending 'ready' to {self.current_service_agv}")
+                self._send_command_to_agv(self.current_service_agv, 'ready')
+                self._publish_global_status("AGV_MOVING_TO_DESTINATION")
+            else:
+                self.get_logger().info(f"   {self.current_service_agv} state is {current_state}, ready signal queued in event")
+        else:
+            # No AGV command in progress yet — signal is queued in ready_to_move_event.
+            # _pick_up_and_deliver will read xarm_already_ready=True when it runs.
+            self.get_logger().info("   No AGV in service yet, signal queued for _pick_up_and_deliver")
+
+        # Send ACK back to superfactory
+        self._publish_global_ack("READY_TO_MOVE")
+
+    def _find_agv_at_loading_station(self) -> Optional[str]:
+        """
+        Find an AGV at the loading station (position A).
+
+        Returns:
+            AGV ID ('agv_1', etc.) if found, None otherwise
+        """
+        for agv_id in self.agv_ids:
+            agv_key = f'agv_{agv_id}'
+            status = self.agv_detailed_status.get(agv_key, {})
+            position = status.get('position', 'UNKNOWN')
+            state = status.get('state', 'UNKNOWN')
+            last_update = status.get('last_update', 0)
+
+            # Check if AGV is online (updated within last 5 seconds)
+            is_online = (time.time() - last_update) < 5.0
+
+            # AGV at position A and in IDLE or WAITING_LOAD state
+            if position == 'A' and state in ['IDLE', 'WAITING_LOAD'] and is_online:
+                return agv_key
+
+        return None
+
+    def _handle_ready_to_return(self):
+        """
+        Handle READY_TO_RETURN signal from superfactory.
+        This is routed from Niryo/Ned2 when it finishes picking a part from the AGV.
+        """
+        self.get_logger().info("=" * 60)
+        self.get_logger().info("READY_TO_RETURN received from superfactory")
+        self.get_logger().info("   (Ned2 finished picking part from AGV)")
+        self.get_logger().info("=" * 60)
+
+        # Set the event to unblock any waiting operation
+        self.ready_to_return_event.set()
+
+        # If we have an AGV currently in service and waiting for unload, send ready
+        if self.current_service_agv:
+            agv_status = self.agv_detailed_status.get(self.current_service_agv, {})
+            current_state = agv_status.get('state', 'UNKNOWN')
+
+            if current_state in ['WAITING_UNLOAD', 'ARRIVED']:
+                self.get_logger().info(f"   Sending 'ready' to {self.current_service_agv}")
+                self._send_command_to_agv(self.current_service_agv, 'ready')
+                self._publish_global_status("AGV_RETURNING_TO_QUEUE")
+            else:
+                self.get_logger().info(f"   {self.current_service_agv} state is {current_state}, ready signal queued")
+        else:
+            # No AGV in service - auto-detect AGV at destination waiting for unload
+            self.get_logger().info("   No AGV in service, auto-detecting AGV at destination...")
+
+            available_agv = self._find_agv_at_destination()
+
+            if available_agv:
+                self.get_logger().info(f"   Found {available_agv} at destination, sending return command")
+
+                # Set as current service AGV
+                self.current_service_agv = available_agv
+
+                # Send ready to return to queue
+                self._send_command_to_agv(available_agv, 'ready')
+                self._publish_global_status("AGV_RETURNING_TO_QUEUE")
+            else:
+                self.get_logger().warn("   No AGV found at destination waiting for unload")
+
+        # Send ACK back to superfactory
+        self._publish_global_ack("READY_TO_RETURN")
+
+    def _find_agv_at_destination(self) -> Optional[str]:
+        """
+        Find an AGV at a destination waiting for unload.
+
+        Returns:
+            AGV ID ('agv_1', etc.) if found, None otherwise
+        """
+        for agv_id in self.agv_ids:
+            agv_key = f'agv_{agv_id}'
+            status = self.agv_detailed_status.get(agv_key, {})
+            position = status.get('position', 'UNKNOWN')
+            state = status.get('state', 'UNKNOWN')
+            last_update = status.get('last_update', 0)
+
+            # Check if AGV is online (updated within last 5 seconds)
+            is_online = (time.time() - last_update) < 5.0
+
+            # AGV at destination (D, E, etc.) and in WAITING_UNLOAD or ARRIVED state
+            if position in self.destinations and state in ['WAITING_UNLOAD', 'ARRIVED'] and is_online:
+                return agv_key
+
+        return None
 
     # ==================== PICK/PLACE OPERATIONS ====================
 
@@ -408,6 +575,15 @@ class AGVFactoryNode(Node):
         self.current_service_agv = agv_id
         self.current_destination = drop_location
 
+        # Capture whether Xarm READY arrived before we clear the event (race condition guard)
+        xarm_already_ready = self.ready_to_move_event.is_set()
+        if xarm_already_ready:
+            self.get_logger().info(f"[{agv_id}] READY_TO_MOVE pre-received (Xarm finished before AGV command arrived)")
+
+        # Clear READY events before starting
+        self.ready_to_move_event.clear()
+        self.ready_to_return_event.clear()
+
         # Send deliver command to AGV
         # The Arduino expects: "deliver D" or "deliver E"
         agv_command = f'deliver {drop_location.lower()}'
@@ -416,12 +592,17 @@ class AGVFactoryNode(Node):
         # Wait for AGV to enter WAITING_LOAD state
         self._wait_for_agv_state(agv_id, 'WAITING_LOAD', timeout=10.0)
 
-        # For now, auto-send ready (in real system, this would wait for part load confirmation)
-        # The superfactory would send a separate "ready" command after loading
-        self.get_logger().info(f"[{agv_id}] Waiting for load confirmation...")
+        # Notify that we're waiting for part to be loaded
+        self.get_logger().info(f"[{agv_id}] At loading station, waiting for Xarm to load part...")
+        self._publish_global_status("AGV_WAITING_FOR_LOAD")
 
-        # Don't wait for completion here - the status callback will handle it
-        # The superfactory should send the "ready" signal when the part is loaded
+        # If Xarm already finished loading before AGV arrived, send 'ready' immediately
+        if xarm_already_ready:
+            self.get_logger().info(f"[{agv_id}] Sending 'ready' immediately (Xarm pre-loaded)")
+            self._send_command_to_agv(agv_id, 'ready')
+            self._publish_global_status("AGV_MOVING_TO_DESTINATION")
+        # else: The READY_TO_MOVE signal will be handled by _handle_ready_to_move()
+        # which will send 'ready' to the AGV when the Xarm finishes loading
 
     def _parse_agv_id(self, robot_id_str: str) -> Optional[str]:
         """
@@ -599,6 +780,18 @@ class AGVFactoryNode(Node):
 
         # Brief pause for message delivery
         time.sleep(0.1)
+
+    def _get_agv_hw_name(self, agv_id: str) -> str:
+        """
+        Get hardware name for AGV (e.g., Alvik1) from config.
+
+        Args:
+            agv_id: AGV identifier ('agv_1', 'agv_2', etc.)
+
+        Returns:
+            Hardware name string
+        """
+        return self.agv_config.get(agv_id, {}).get('name', agv_id)
 
     def _wait_for_agv_idle(self, agv_id: str, timeout: float = 30.0):
         """

@@ -1,0 +1,4 @@
+robot,row,segment,move_type,speed,acceleration,return_code,duration_s,error_recovered,notes,cycle_success,cycle_total_s
+xarm1,1,HOME(joint),joint,20.0,500.0,0,0.1538,False,,False,3.1366
+xarm1,1,HOME->C1_approach(tcp),tcp,50.0,2000.0,1,0.0019,True,recovered_then_fail,False,3.1366
+xarm1,2,HOME(joint),joint,20.0,500.0,1,0.0019,True,recovered_then_fail,False,2.0183

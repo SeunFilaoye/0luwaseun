@@ -26,7 +26,7 @@ conveyor_2:
       pin: "DI3"
       direction: 1
       triggers_robot: 1
-      pickup_position: "P11"
+      pickup_position: "P12"
       description: "Multipath flow, either C5 or C4"
 
 conveyor_3:
@@ -39,8 +39,8 @@ conveyor_3:
     forward:
       pin: "DI5"
       direction: 1
-      triggers_robot: 3
-      pickup_position: "P11"
+      triggers_robot: 2
+      pickup_position: "P13"
       description: "Normal flow to R3"
 
 conveyor_4:
@@ -53,27 +53,27 @@ conveyor_4:
     forward:
       pin: "DI5"
       direction: 1
-      triggers_robot: [3, 4]       # Logically triggers both R3 and R4
-      pickup_position: "P11"
+      triggers_robot: 3       # Logically triggers both R3 and R4
+      pickup_position: "P14"
       description: "Normal flow to R3 or R4"
 
 conveyor_5:
   robot_namespace: "robot4"        # ← FIXED: C5 is on R4's panel
-  conveyor_hardware_id: 9
+  conveyor_hardware_id: 10
   speed: 70
   description: "Conveyor C5 - Feeds Robot R4 from R1"
   
   sensors:
     forward:
-      pin: "DI5"
+      pin: "DI1"
       direction: 1
       triggers_robot: 4
-      pickup_position: "P11"
+      pickup_position: "P15"
       description: "Normal forward flow to R4"
 
 conveyor_6:
   robot_namespace: "robot4"        # ← FIXED: C6 is on R4's panel (hardware_id 10)
-  conveyor_hardware_id: 10
+  conveyor_hardware_id: 9
   speed: 70
   description: "Conveyor C6 - Feeds Robot R5 from R4"
   
@@ -81,8 +81,8 @@ conveyor_6:
     forward:
       pin: "DI5"
       direction: 1
-      triggers_robot: 5
-      pickup_position: "P11"
+      triggers_robot: 4
+      pickup_position: "P16"
       description: "Normal forward flow to R5"
 
 conveyor_7:
@@ -93,10 +93,10 @@ conveyor_7:
   
   sensors:
     forward:
-      pin: "DI5"
+      pin: "DI1"
       direction: 1
       triggers_robot: [5, 6]
-      pickup_position: "P12"
+      pickup_position: "P17"
       description: "Normal flow to R5 or R6"
 
 conveyor_8:
@@ -110,7 +110,7 @@ conveyor_8:
       pin: "DI5"
       direction: 1
       triggers_robot: 6
-      pickup_position: "P11"
+      pickup_position: "P18"
       description: "Normal flow to R6"
 
 # Configuration metadata

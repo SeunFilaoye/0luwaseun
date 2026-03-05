@@ -1,292 +1,220 @@
-# Testbed Graph Configuration
-# This file defines the nodes and edges representing the physical testbed
+# Testbed Graph Configuration — 6-Route Topology
+# Nodes and edges representing the physical testbed for all 6 routes
 
 nodes:
-  # ==================== ORIGIN NODES (ASRS) ====================
-  # ASRS represented as 2 origin nodes (one per Xarm)
+  # ==================== XARM ORIGIN NODES (per ASRS column) ====================
+  # One origin node per ASRS column — determines which xarm and which conveyor drop
 
-  - id: "ASRS_XARM1"
+  - id: "XARM1_C1"
     type: "origin"
     vendor: "lite6"
-    capacity: 1
-    description: "ASRS access for Xarm1 (columns 1-3)"
+    robot: "XARM1"
+    asrs_column: 1
+    description: "XARM1 picks from ASRS column 1 → drops to Conveyor 1"
 
-  - id: "ASRS_XARM2"
+  - id: "XARM1_C2"
     type: "origin"
     vendor: "lite6"
-    capacity: 1
-    description: "ASRS access for Xarm2 (columns 4-6)"
+    robot: "XARM1"
+    asrs_column: 2
+    description: "XARM1 picks from ASRS column 2 → drops to Conveyor 2"
 
-  # ==================== LITE6 DROP-OFF POSITIONS ====================
-  # 4 explicit nodes for Xarm drop-off positions
+  - id: "XARM1_C3"
+    type: "origin"
+    vendor: "lite6"
+    robot: "XARM1"
+    asrs_column: 3
+    description: "XARM1 picks from ASRS column 3 → drops to Conveyor 2"
+
+  - id: "XARM2_C4"
+    type: "origin"
+    vendor: "lite6"
+    robot: "XARM2"
+    asrs_column: 4
+    description: "XARM2 picks from ASRS column 4 → drops to AGV"
+
+  - id: "XARM2_C5"
+    type: "origin"
+    vendor: "lite6"
+    robot: "XARM2"
+    asrs_column: 5
+    description: "XARM2 picks from ASRS column 5 → drops to Conveyor 4"
+
+  - id: "XARM2_C6"
+    type: "origin"
+    vendor: "lite6"
+    robot: "XARM2"
+    asrs_column: 6
+    description: "XARM2 picks from ASRS column 6 → drops to Conveyor 2"
+
+  # ==================== XARM DROP NODES ====================
 
   - id: "XARM1_CONV1_DROP"
     type: "dropoff"
     vendor: "lite6"
     robot: "XARM1"
-    capacity: 1
-    description: "Xarm1 drop-off to Conveyor 1"
+    description: "XARM1 drop-off point for Conveyor 1"
 
   - id: "XARM1_CONV2_DROP"
     type: "dropoff"
     vendor: "lite6"
     robot: "XARM1"
-    capacity: 1
-    description: "Xarm1 drop-off to Conveyor 2"
+    description: "XARM1 drop-off point for Conveyor 2 (routes 3 and 5)"
+
+  - id: "XARM2_AGV_DROP"
+    type: "dropoff"
+    vendor: "lite6"
+    robot: "XARM2"
+    description: "XARM2 drop-off point for AGV (route 2)"
+
+  - id: "XARM2_CONV4_DROP"
+    type: "dropoff"
+    vendor: "lite6"
+    robot: "XARM2"
+    description: "XARM2 drop-off point for Conveyor 4 (route 4)"
 
   - id: "XARM2_CONV2_DROP"
     type: "dropoff"
     vendor: "lite6"
     robot: "XARM2"
-    capacity: 1
-    description: "Xarm2 drop-off to Conveyor 2"
+    description: "XARM2 drop-off point for Conveyor 2 (route 6)"
 
-  - id: "XARM2_CONV3_DROP"
-    type: "dropoff"
-    vendor: "lite6"
-    robot: "XARM2"
-    capacity: 1
-    description: "Xarm2 drop-off to Conveyor 3"
+  # ==================== AGV INTERMEDIATE NODE ====================
 
-  # ==================== CONVEYOR PICKUP POSITIONS ====================
-  # 8 conveyors, each has pickup position (C<n>2 format)
+  - id: "AGV_NODE_D"
+    type: "pickup"
+    vendor: "agv"
+    description: "AGV node D — R6 picks from here (route 2)"
 
-  - id: "C1_PICKUP"  # C12 in physical system
+  # ==================== CONVEYOR PICKUP NODES ====================
+
+  - id: "C1_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 1
-    capacity: 1
-    description: "Conveyor 1 pickup position"
+    description: "Conveyor 1 pickup position (route 1: R1 picks here)"
 
-  - id: "C2_PICKUP"  # C22
+  - id: "C2_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 2
-    capacity: 1
-    description: "Conveyor 2 pickup position"
+    description: "Conveyor 2 pickup position (routes 3,5,6: fork to C3 or C5)"
 
-  - id: "C3_PICKUP"  # C32
+  - id: "C3_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 3
-    capacity: 1
-    description: "Conveyor 3 pickup position"
+    description: "Conveyor 3 pickup position (routes 3,6: R2 picks here)"
 
-  - id: "C4_PICKUP"  # C42
+  - id: "C4_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 4
-    capacity: 1
-    description: "Conveyor 4 pickup position"
+    description: "Conveyor 4 pickup position (route 4: R3 picks here)"
 
-  - id: "C5_PICKUP"  # C52
+  - id: "C5_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 5
-    capacity: 1
-    description: "Conveyor 5 pickup position"
+    description: "Conveyor 5 pickup position (routes 1,5: R4 picks here)"
 
-  - id: "C6_PICKUP"  # C62
+  - id: "C6_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 6
-    capacity: 1
-    description: "Conveyor 6 pickup position"
+    description: "Conveyor 6 pickup position (routes 1,5: R4 second pick here)"
 
-  - id: "C7_PICKUP"  # C72
+  - id: "C7_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 7
-    capacity: 1
-    description: "Conveyor 7 pickup position"
+    description: "Conveyor 7 pickup position (routes 3,6: R5 picks here)"
 
-  - id: "C8_PICKUP"  # C82
+  - id: "C8_PICKUP"
     type: "pickup"
     vendor: "conveyor"
     conveyor_id: 8
-    capacity: 1
-    description: "Conveyor 8 pickup position"
+    description: "Conveyor 8 pickup position (route 4: R6 picks here)"
 
-  # ==================== NIRYO ROBOT POSITIONS ====================
-  # Positions defined per robot based on their config files
-  # Format: R<robot_id>_<position_key>
-  # You'll fill these based on each robot's actual pickup/drop positions
+  # ==================== EXIT NODES ====================
 
-  # Robot 1 positions (example - replace with actual positions from config)
-  - id: "R1_P11"
-    type: "pickup"
-    vendor: "niryo"
-    robot: "R1"
-    capacity: 1
-    description: "Robot 1 pickup position P11"
-
-  - id: "R1_D12"
-    type: "dropoff"
-    vendor: "niryo"
-    robot: "R1"
-    capacity: 1
-    description: "Robot 1 drop position D12"
-
-  # Robot 2 positions
-  - id: "R2_P12"
-    type: "pickup"
-    vendor: "niryo"
-    robot: "R2"
-    capacity: 1
-    description: "Robot 2 pickup position P12"
-
-  - id: "R2_D23"
-    type: "dropoff"
-    vendor: "niryo"
-    robot: "R2"
-    capacity: 1
-    description: "Robot 2 drop position D23"
-
-  # Robot 3 positions
-  - id: "R3_P23"
-    type: "pickup"
-    vendor: "niryo"
-    robot: "R3"
-    capacity: 1
-    description: "Robot 3 pickup position P23"
-
-  - id: "R3_D34"
-    type: "dropoff"
-    vendor: "niryo"
-    robot: "R3"
-    capacity: 1
-    description: "Robot 3 drop position D34"
-
-  # Robot 4 positions
-  - id: "R4_P34"
-    type: "pickup"
+  - id: "RED_BIN"
+    type: "exit"
     vendor: "niryo"
     robot: "R4"
-    capacity: 1
-    description: "Robot 4 pickup position P34"
+    description: "Red bin exit — R4 drops to D12 (routes 1 and 5)"
 
-  - id: "R4_D45"
-    type: "dropoff"
-    vendor: "niryo"
-    robot: "R4"
-    capacity: 1
-    description: "Robot 4 drop position D45"
-
-  # Robot 5 positions
-  - id: "R5_P45"
-    type: "pickup"
+  - id: "YELLOW_BIN"
+    type: "exit"
     vendor: "niryo"
     robot: "R5"
-    capacity: 1
-    description: "Robot 5 pickup position P45"
+    description: "Yellow bin exit — R5 drops to D13 (routes 3 and 6)"
 
-  - id: "R5_D56"
-    type: "dropoff"
-    vendor: "niryo"
-    robot: "R5"
-    capacity: 1
-    description: "Robot 5 drop position D56"
-
-  # Robot 6 positions
-  - id: "R6_P56"
-    type: "pickup"
+  - id: "BLUE_BIN"
+    type: "exit"
     vendor: "niryo"
     robot: "R6"
-    capacity: 1
-    description: "Robot 6 pickup position P56"
-
-  - id: "R6_D_EXIT"
-    type: "dropoff"
-    vendor: "niryo"
-    robot: "R6"
-    capacity: 1
-    description: "Robot 6 drop to exit"
-
-  # ==================== CONVEYOR DROP-OFF/EXIT POSITIONS ====================
-  # 8 conveyors, each has drop-off position (C<n>1 format)
-
-  - id: "C1_EXIT"  # C11 in physical system
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 1
-    capacity: 1
-    description: "Conveyor 1 exit/drop position"
-
-  - id: "C2_EXIT"  # C21
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 2
-    capacity: 1
-    description: "Conveyor 2 exit/drop position"
-
-  - id: "C3_EXIT"  # C31
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 3
-    capacity: 1
-    description: "Conveyor 3 exit/drop position"
-
-  - id: "C4_EXIT"  # C41
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 4
-    capacity: 1
-    description: "Conveyor 4 exit/drop position"
-
-  - id: "C5_EXIT"  # C51
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 5
-    capacity: 1
-    description: "Conveyor 5 exit/drop position"
-
-  - id: "C6_EXIT"  # C61
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 6
-    capacity: 1
-    description: "Conveyor 6 exit/drop position"
-
-  - id: "C7_EXIT"  # C71
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 7
-    capacity: 1
-    description: "Conveyor 7 exit/drop position"
-
-  - id: "C8_EXIT"  # C81
-    type: "exit"
-    vendor: "conveyor"
-    conveyor_id: 8
-    capacity: 1
-    description: "Conveyor 8 exit/drop position"
+    description: "Blue bin exit — R6 drops to D11 (routes 2 and 4)"
 
 # ==================== EDGES ====================
 edges:
-  # ==================== XARM1 EDGES ====================
-  # Xarm1: ASRS → Conveyor 1 drop
-  - from: "ASRS_XARM1"
-    to: "XARM1_CONV1_DROP"
-    travel_time: 1.0  # Placeholder unit time
-    bidirectional: false
-    vendor: "lite6"
-    robot: "XARM1"
+  # ==================== ROUTE 1: XARM1_C1 → RED_BIN ====================
+  # XARM1 picks C1R1, drops to Conveyor 1, R1→C5, R4→C6, R4→RED_BIN
 
-  # Xarm1: ASRS → Conveyor 2 drop
-  - from: "ASRS_XARM1"
-    to: "XARM1_CONV2_DROP"
+  - from: "XARM1_C1"
+    to: "XARM1_CONV1_DROP"
     travel_time: 1.0
     bidirectional: false
     vendor: "lite6"
     robot: "XARM1"
 
-  # Xarm1 drops connect to conveyor pickups
   - from: "XARM1_CONV1_DROP"
     to: "C1_PICKUP"
-    travel_time: 0.5  # Conveyor transport time
+    travel_time: 0.5
     bidirectional: false
     vendor: "conveyor"
     robot: null
+
+  - from: "C1_PICKUP"
+    to: "C5_PICKUP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R1"
+
+  # ==================== ROUTE 2: XARM2_C4 → BLUE_BIN ====================
+  # XARM2 picks C4R1, drops to AGV, AGV→Node_D, R6→BLUE_BIN
+
+  - from: "XARM2_C4"
+    to: "XARM2_AGV_DROP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "lite6"
+    robot: "XARM2"
+
+  - from: "XARM2_AGV_DROP"
+    to: "AGV_NODE_D"
+    travel_time: 2.0
+    bidirectional: false
+    vendor: "agv"
+    robot: null
+
+  - from: "AGV_NODE_D"
+    to: "BLUE_BIN"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R6"
+
+  # ==================== ROUTE 3: XARM1_C2 → YELLOW_BIN ====================
+  # XARM1 picks C2R1, drops to Conveyor 2, R1→C3, R2→C7, R5→YELLOW_BIN
+
+  - from: "XARM1_C2"
+    to: "XARM1_CONV2_DROP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "lite6"
+    robot: "XARM1"
 
   - from: "XARM1_CONV2_DROP"
     to: "C2_PICKUP"
@@ -295,125 +223,105 @@ edges:
     vendor: "conveyor"
     robot: null
 
-  # ==================== XARM2 EDGES ====================
-  # Xarm2: ASRS → Conveyor 2 drop
-  - from: "ASRS_XARM2"
+  - from: "C2_PICKUP"
+    to: "C3_PICKUP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R1"
+
+  - from: "C3_PICKUP"
+    to: "C7_PICKUP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R2"
+
+  - from: "C7_PICKUP"
+    to: "YELLOW_BIN"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R5"
+
+  # ==================== ROUTE 4: XARM2_C5 → BLUE_BIN ====================
+  # XARM2 picks C5R1, drops to Conveyor 4, R3→C8, R6→BLUE_BIN
+
+  - from: "XARM2_C5"
+    to: "XARM2_CONV4_DROP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "lite6"
+    robot: "XARM2"
+
+  - from: "XARM2_CONV4_DROP"
+    to: "C4_PICKUP"
+    travel_time: 0.5
+    bidirectional: false
+    vendor: "conveyor"
+    robot: null
+
+  - from: "C4_PICKUP"
+    to: "C8_PICKUP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R3"
+
+  - from: "C8_PICKUP"
+    to: "BLUE_BIN"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R6"
+
+  # ==================== ROUTE 5: XARM1_C3 → RED_BIN ====================
+  # XARM1 picks C3R1, drops to Conveyor 2, R1→C5, R4→C6, R4→RED_BIN
+  # Shares XARM1_CONV2_DROP→C2_PICKUP with route 3
+  # Shares C5→C6→RED_BIN with route 1
+
+  - from: "XARM1_C3"
+    to: "XARM1_CONV2_DROP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "lite6"
+    robot: "XARM1"
+
+  - from: "C2_PICKUP"
+    to: "C5_PICKUP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R1"
+
+  - from: "C5_PICKUP"
+    to: "C6_PICKUP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R4"
+
+  - from: "C6_PICKUP"
+    to: "RED_BIN"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R4"
+
+  # ==================== ROUTE 6: XARM2_C6 → YELLOW_BIN ====================
+  # XARM2 picks C6R1, drops to Conveyor 2, R1→C3, R2→C7, R5→YELLOW_BIN
+  # Shares C2→C3→C7→YELLOW_BIN with route 3
+
+  - from: "XARM2_C6"
     to: "XARM2_CONV2_DROP"
     travel_time: 1.0
     bidirectional: false
     vendor: "lite6"
     robot: "XARM2"
 
-  # Xarm2: ASRS → Conveyor 3 drop
-  - from: "ASRS_XARM2"
-    to: "XARM2_CONV3_DROP"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "lite6"
-    robot: "XARM2"
-
-  # Xarm2 drops connect to conveyor pickups
   - from: "XARM2_CONV2_DROP"
     to: "C2_PICKUP"
     travel_time: 0.5
     bidirectional: false
     vendor: "conveyor"
     robot: null
-
-  - from: "XARM2_CONV3_DROP"
-    to: "C3_PICKUP"
-    travel_time: 0.5
-    bidirectional: false
-    vendor: "conveyor"
-    robot: null
-
-  # ==================== NIRYO ROBOT EDGES ====================
-  # Example robot chain (modify based on your actual robot configs)
-
-  # R1: Conveyor pickup → R1 drop
-  - from: "C1_PICKUP"
-    to: "R1_D12"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R1"
-
-  # R2: Conveyor pickup or R1 drop → R2 drop
-  - from: "C1_PICKUP"
-    to: "R2_D23"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R2"
-
-  - from: "R1_D12"
-    to: "R2_D23"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R2"
-
-  # R3: R2 drop → R3 drop
-  - from: "R2_D23"
-    to: "R3_D34"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R3"
-
-  # R4: R3 drop → R4 drop
-  - from: "R3_D34"
-    to: "R4_D45"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R4"
-
-  # R5: R4 drop → R5 drop
-  - from: "R4_D45"
-    to: "R5_D56"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R5"
-
-  # R6: R5 drop → R6 drop to exit
-  - from: "R5_D56"
-    to: "R6_D_EXIT"
-    travel_time: 1.0
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R6"
-
-  # ==================== EXIT EDGES ====================
-  # Robots can drop to conveyor exits
-
-  - from: "R6_D_EXIT"
-    to: "C1_EXIT"
-    travel_time: 0.5
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R6"
-
-  - from: "R6_D_EXIT"
-    to: "C2_EXIT"
-    travel_time: 0.5
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R6"
-
-  - from: "R6_D_EXIT"
-    to: "C3_EXIT"
-    travel_time: 0.5
-    bidirectional: false
-    vendor: "niryo"
-    robot: "R6"
-
-  # Add more edges based on which robots can reach which exits
-  # This is where you define the actual connectivity based on your robot configs
-
-# ==================== NOTES ====================
-# TODO: Fill in actual robot positions from each robot's config file
-# TODO: Fill in actual travel times from time studies (currently all 1.0 as placeholder)
-# TODO: Add all robot-to-robot and robot-to-exit connections based on your testbed layout
-# TODO: Add bidirectional conveyor edges if parts can flow both ways

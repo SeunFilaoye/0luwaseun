@@ -23,6 +23,16 @@ class AlgorithmPlanner:
     Plans part trajectories using graph-based routing algorithms.
     """
 
+    # Maps (xarm, asrs_column) → (origin_node, exit_node)
+    COLUMN_ROUTING = {
+        ('XARM1', 1): ('XARM1_C1', 'RED_BIN'),
+        ('XARM1', 2): ('XARM1_C2', 'YELLOW_BIN'),
+        ('XARM1', 3): ('XARM1_C3', 'RED_BIN'),
+        ('XARM2', 4): ('XARM2_C4', 'BLUE_BIN'),
+        ('XARM2', 5): ('XARM2_C5', 'BLUE_BIN'),
+        ('XARM2', 6): ('XARM2_C6', 'YELLOW_BIN'),
+    }
+
     def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize Algorithm Planner.
@@ -78,17 +88,12 @@ class AlgorithmPlanner:
 
             self.logger.info(f"\nPlanning route for Order {order_id} (Part: {part_id}, Xarm: {xarm})")
 
-            # Determine origin node based on xarm assignment
-            origin_node = f"ASRS_{xarm}"
-
-            # For now, route to first available exit (can be made smarter)
-            exit_nodes = self._get_exit_nodes(graph)
-            if not exit_nodes:
-                self.logger.error("❌ No exit nodes found in graph")
-                continue
-
-            # Use first exit for now (TODO: smarter exit selection)
-            exit_node = exit_nodes[0]
+            # Determine origin and exit nodes from ASRS column
+            asrs_loc = asrs_data.get(part_id, [''])[0]  # e.g. "C1R1"
+            column = int(asrs_loc[1]) if len(asrs_loc) >= 2 and asrs_loc[1].isdigit() else 1
+            origin_node, exit_node = self.COLUMN_ROUTING.get(
+                (xarm, column), ('XARM1_C1', 'RED_BIN'))
+            self.logger.info(f"  ASRS loc: {asrs_loc} → column {column} → {origin_node} → {exit_node}")
 
             # Find shortest path
             path = self._find_shortest_path(graph, origin_node, exit_node)

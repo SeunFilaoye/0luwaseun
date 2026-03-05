@@ -155,6 +155,22 @@ class AlgorithmNode(Node):
             self.get_logger().info("📥 ALGORITHM TRIGGER RECEIVED")
             self.get_logger().info("=" * 70)
 
+            # Manual trajectory passthrough
+            if 'manual_commands' in trigger_data or 'manual_trajectory' in trigger_data:
+                manual_commands = trigger_data.get('manual_commands')
+                manual_trajectory = trigger_data.get('manual_trajectory')
+
+                if isinstance(manual_commands, list):
+                    vendor_commands = '\n'.join([c.strip() for c in manual_commands if c.strip()])
+                elif isinstance(manual_trajectory, str):
+                    vendor_commands = manual_trajectory.strip()
+                else:
+                    self.get_logger().error("❌ Invalid manual command format")
+                    return
+
+                self._publish_trajectory(vendor_commands)
+                return
+
             xarm1_parts = trigger_data.get('xarm1_parts', [])
             xarm2_parts = trigger_data.get('xarm2_parts', [])
             asrs_data = trigger_data.get('asrs_data', {})

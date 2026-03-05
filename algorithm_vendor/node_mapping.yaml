@@ -96,77 +96,143 @@ node_mappings:
     description: "Conveyor 8 pickup position"
 
   # Niryo Robot Positions (examples - replace with actual positions from configs)
-  R1_P11:
+  R1_C1_PICKUP:
     vendor: "niryo"
     robot: "R1"
     position_key: "P11"
-    description: "Robot 1 pickup position"
+    description: "Robot 1 pickup from Conveyor 1"
 
-  R1_D12:
+  R1_C2_PICKUP:
     vendor: "niryo"
     robot: "R1"
-    position_key: "D12"
-    description: "Robot 1 drop position"
-
-  R2_P12:
-    vendor: "niryo"
-    robot: "R2"
     position_key: "P12"
-    description: "Robot 2 pickup position"
+    description: "Robot 1 pickup from Conveyor 2"
 
-  R2_D23:
+  R1_C3_DROP:
+    vendor: "niryo"
+    robot: "R1"
+    position_key: "D13"
+    description: "Robot 1 drop to Conveyor 3"
+
+  R1_C5_DROP:
+    vendor: "niryo"
+    robot: "R1"
+    position_key: "D15"
+    description: "Robot 1 drop to Conveyor 5"
+
+  R2_C3_PICKUP:
     vendor: "niryo"
     robot: "R2"
-    position_key: "D23"
-    description: "Robot 2 drop position"
+    position_key: "P13"
+    description: "Robot 2 pickup from Conveyor 3"
 
-  R3_P23:
+  R2_C5_PICKUP:
+    vendor: "niryo"
+    robot: "R2"
+    position_key: "P15"
+    description: "Robot 2 pickup from Conveyor 5"
+
+  R2_C7_DROP:
+    vendor: "niryo"
+    robot: "R2"
+    position_key: "D17"
+    description: "Robot 2 drop to Conveyor 7"
+
+  R3_C3_PICKUP:
     vendor: "niryo"
     robot: "R3"
-    position_key: "P23"
-    description: "Robot 3 pickup position"
+    position_key: "P13"
+    description: "Robot 3 pickup from Conveyor 3"
 
-  R3_D34:
+  R3_C4_PICKUP:
     vendor: "niryo"
     robot: "R3"
-    position_key: "D34"
-    description: "Robot 3 drop position"
+    position_key: "P14"
+    description: "Robot 3 pickup from Conveyor 4"
 
-  R4_P34:
+  R3_C8_DROP:
+    vendor: "niryo"
+    robot: "R3"
+    position_key: "D18"
+    description: "Robot 3 drop to Conveyor 8"
+
+  R4_C5_PICKUP:
     vendor: "niryo"
     robot: "R4"
-    position_key: "P34"
-    description: "Robot 4 pickup position"
+    position_key: "P15"
+    description: "Robot 4 pickup from Conveyor 5"
 
-  R4_D45:
+  R4_C6_PICKUP:
     vendor: "niryo"
     robot: "R4"
-    position_key: "D45"
-    description: "Robot 4 drop position"
+    position_key: "P16"
+    description: "Robot 4 pickup from Conveyor 6"
 
-  R5_P45:
+  R4_C6_DROP:
+    vendor: "niryo"
+    robot: "R4"
+    position_key: "D16"
+    description: "Robot 4 drop to Conveyor 6"
+
+  R4_RED_DROP:
+    vendor: "niryo"
+    robot: "R4"
+    position_key: "D12"
+    description: "Robot 4 drop to Red Bin"
+
+  R5_AGV_E_PICKUP:
     vendor: "niryo"
     robot: "R5"
-    position_key: "P45"
-    description: "Robot 5 pickup position"
+    position_key: "P13"
+    description: "Robot 5 pickup from AGV node E"
 
-  R5_D56:
+  R5_C6_PICKUP:
     vendor: "niryo"
     robot: "R5"
-    position_key: "D56"
-    description: "Robot 5 drop position"
+    position_key: "P16"
+    description: "Robot 5 pickup from Conveyor 6"
 
-  R6_P56:
+  R5_C7_PICKUP:
+    vendor: "niryo"
+    robot: "R5"
+    position_key: "P17"
+    description: "Robot 5 pickup from Conveyor 7"
+
+  R5_RED_DROP:
+    vendor: "niryo"
+    robot: "R5"
+    position_key: "D11"
+    description: "Robot 5 drop to Red bin"
+
+  R5_BLUE_DROP:
+    vendor: "niryo"
+    robot: "R5"
+    position_key: "D12"
+    description: "Robot 5 drop to Blue bin"
+
+  R5_YELLOW_DROP:
+    vendor: "niryo"
+    robot: "R5"
+    position_key: "D13"
+    description: "Robot 5 drop to Yellow bin"
+
+  R6_AGV_D_PICKUP:
     vendor: "niryo"
     robot: "R6"
-    position_key: "P56"
-    description: "Robot 6 pickup position"
+    position_key: "P12"
+    description: "Robot 6 pickup from AGV node D"
 
-  R6_D_EXIT:
+  R6_C8_PICKUP:
     vendor: "niryo"
     robot: "R6"
-    position_key: "D_EXIT"
-    description: "Robot 6 drop to exit"
+    position_key: "P18"
+    description: "Robot 6 pickup from Conveyor 8"
+
+  R6_BLUE_DROP:
+    vendor: "niryo"
+    robot: "R6"
+    position_key: "D12"
+    description: "Robot 6 drop to Blue bin"
 
   # Conveyor Exit Positions (C<n>1 format in physical system)
   C1_EXIT:
@@ -219,148 +285,141 @@ node_mappings:
 
 # ==================== EDGE MAPPINGS ====================
 # Maps edges to vendor command templates
-# Variables: {column}, {row}, {source}, {dest}
+# Variables: {column}, {row} are substituted from ASRS location (e.g. C1R1 → column=C1, row=R1)
+# Conveyor edges with null command_template represent passive transport (no robot command)
 edge_mappings:
-  # ==================== XARM1 EDGES ====================
-  # ASRS → Conveyor 1
-  - from: "ASRS_XARM1"
+  # ==================== ROUTE 1: XARM1_C1 → RED_BIN ====================
+  - from: "XARM1_C1"
     to: "XARM1_CONV1_DROP"
-    command_template: "XARM1 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR C1"
+    command_template: "XARM1 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR 1"
     vendor: "lite6"
     robot: "XARM1"
 
-  # ASRS → Conveyor 2
-  - from: "ASRS_XARM1"
-    to: "XARM1_CONV2_DROP"
-    command_template: "XARM1 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR C2"
-    vendor: "lite6"
-    robot: "XARM1"
-
-  # Xarm1 drops → Conveyor pickups (conveyor transport, no command needed)
   - from: "XARM1_CONV1_DROP"
     to: "C1_PICKUP"
-    command_template: null  # Conveyor transport, no robot command
+    command_template: null
     vendor: "conveyor"
     robot: null
 
-  - from: "XARM1_CONV2_DROP"
-    to: "C2_PICKUP"
-    command_template: null  # Conveyor transport, no robot command
-    vendor: "conveyor"
-    robot: null
-
-  # ==================== XARM2 EDGES ====================
-  # ASRS → Conveyor 2
-  - from: "ASRS_XARM2"
-    to: "XARM2_CONV2_DROP"
-    command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR C2"
-    vendor: "lite6"
-    robot: "XARM2"
-
-  # ASRS → Conveyor 3
-  - from: "ASRS_XARM2"
-    to: "XARM2_CONV3_DROP"
-    command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR C3"
-    vendor: "lite6"
-    robot: "XARM2"
-
-  # Xarm2 drops → Conveyor pickups (conveyor transport, no command needed)
-  - from: "XARM2_CONV2_DROP"
-    to: "C2_PICKUP"
-    command_template: null  # Conveyor transport, no robot command
-    vendor: "conveyor"
-    robot: null
-
-  - from: "XARM2_CONV3_DROP"
-    to: "C3_PICKUP"
-    command_template: null  # Conveyor transport, no robot command
-    vendor: "conveyor"
-    robot: null
-
-  # ==================== NIRYO ROBOT EDGES ====================
-  # Example robot chain (modify based on actual robot configs)
-
-  # R1: Conveyor pickup → R1 drop
   - from: "C1_PICKUP"
-    to: "R1_D12"
-    command_template: "R1 | PICKUP - C1 | DROP - D12"
+    to: "C5_PICKUP"
+    command_template: "R1 | PICKUP - P11 | DROP - D15"
     vendor: "niryo"
     robot: "R1"
 
-  # R2: Conveyor pickup or R1 drop → R2 drop
-  - from: "C1_PICKUP"
-    to: "R2_D23"
-    command_template: "R2 | PICKUP - C1 | DROP - D23"
+  # ==================== ROUTE 2: XARM2_C4 → BLUE_BIN ====================
+  - from: "XARM2_C4"
+    to: "XARM2_AGV_DROP"
+    command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - AGV A"
+    vendor: "lite6"
+    robot: "XARM2"
+
+  - from: "XARM2_AGV_DROP"
+    to: "AGV_NODE_D"
+    command_template: "AGV1 | PICKUP - A | DROP - D"
+    vendor: "agv"
+    robot: null
+
+  - from: "AGV_NODE_D"
+    to: "BLUE_BIN"
+    command_template: null
+    vendor: "niryo"
+    robot: "R6"
+    # R6 is dispatched directly by superfactory._handle_agv_arrival when AGV arrives at D.
+    # Keeping it null here avoids a second R6 execution from the trajectory queue.
+
+  # ==================== ROUTE 3: XARM1_C2 → YELLOW_BIN ====================
+  - from: "XARM1_C2"
+    to: "XARM1_CONV2_DROP"
+    command_template: "XARM1 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR 2"
+    vendor: "lite6"
+    robot: "XARM1"
+
+  - from: "XARM1_CONV2_DROP"
+    to: "C2_PICKUP"
+    command_template: null
+    vendor: "conveyor"
+    robot: null
+
+  - from: "C2_PICKUP"
+    to: "C3_PICKUP"
+    command_template: "R1 | PICKUP - P12 | DROP - D13"
+    vendor: "niryo"
+    robot: "R1"
+
+  - from: "C3_PICKUP"
+    to: "C7_PICKUP"
+    command_template: "R2 | PICKUP - P13 | DROP - D17"
     vendor: "niryo"
     robot: "R2"
 
-  - from: "R1_D12"
-    to: "R2_D23"
-    command_template: "R2 | PICKUP - D12 | DROP - D23"
-    vendor: "niryo"
-    robot: "R2"
-
-  # R3: R2 drop → R3 drop
-  - from: "R2_D23"
-    to: "R3_D34"
-    command_template: "R3 | PICKUP - D23 | DROP - D34"
-    vendor: "niryo"
-    robot: "R3"
-
-  # R4: R3 drop → R4 drop
-  - from: "R3_D34"
-    to: "R4_D45"
-    command_template: "R4 | PICKUP - D34 | DROP - D45"
-    vendor: "niryo"
-    robot: "R4"
-
-  # R5: R4 drop → R5 drop
-  - from: "R4_D45"
-    to: "R5_D56"
-    command_template: "R5 | PICKUP - D45 | DROP - D56"
+  - from: "C7_PICKUP"
+    to: "YELLOW_BIN"
+    command_template: "R5 | PICKUP - P17 | DROP - D13"
     vendor: "niryo"
     robot: "R5"
 
-  # R6: R5 drop → R6 drop to exit
-  - from: "R5_D56"
-    to: "R6_D_EXIT"
-    command_template: "R6 | PICKUP - D56 | DROP - EXIT"
+  # ==================== ROUTE 4: XARM2_C5 → BLUE_BIN ====================
+  - from: "XARM2_C5"
+    to: "XARM2_CONV4_DROP"
+    command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR 4"
+    vendor: "lite6"
+    robot: "XARM2"
+
+  - from: "XARM2_CONV4_DROP"
+    to: "C4_PICKUP"
+    command_template: null
+    vendor: "conveyor"
+    robot: null
+
+  - from: "C4_PICKUP"
+    to: "C8_PICKUP"
+    command_template: "R3 | PICKUP - P14 | DROP - D18"
+    vendor: "niryo"
+    robot: "R3"
+
+  - from: "C8_PICKUP"
+    to: "BLUE_BIN"
+    command_template: "R6 | PICKUP - P18 | DROP - D11"
     vendor: "niryo"
     robot: "R6"
 
-  # ==================== EXIT EDGES ====================
-  # R6 can drop to different conveyor exits
-  - from: "R6_D_EXIT"
-    to: "C1_EXIT"
-    command_template: "R6 | PICKUP - EXIT | DROP - C1"
+  # ==================== ROUTE 5: XARM1_C3 → RED_BIN ====================
+  # (shares XARM1_CONV2_DROP→C2_PICKUP with route 3)
+  - from: "XARM1_C3"
+    to: "XARM1_CONV2_DROP"
+    command_template: "XARM1 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR 2"
+    vendor: "lite6"
+    robot: "XARM1"
+
+  - from: "C2_PICKUP"
+    to: "C5_PICKUP"
+    command_template: "R1 | PICKUP - P12 | DROP - D15"
     vendor: "niryo"
-    robot: "R6"
+    robot: "R1"
 
-  - from: "R6_D_EXIT"
-    to: "C2_EXIT"
-    command_template: "R6 | PICKUP - EXIT | DROP - C2"
+  - from: "C5_PICKUP"
+    to: "C6_PICKUP"
+    command_template: "R4 | PICKUP - P15 | DROP - D16"
     vendor: "niryo"
-    robot: "R6"
+    robot: "R4"
 
-  - from: "R6_D_EXIT"
-    to: "C3_EXIT"
-    command_template: "R6 | PICKUP - EXIT | DROP - C3"
+  - from: "C6_PICKUP"
+    to: "RED_BIN"
+    command_template: "R4 | PICKUP - P16 | DROP - D12"
     vendor: "niryo"
-    robot: "R6"
+    robot: "R4"
 
-  # Add more exit edges based on which robots can reach which exits
+  # ==================== ROUTE 6: XARM2_C6 → YELLOW_BIN ====================
+  # (shares C2→C3→C7→YELLOW_BIN with route 3)
+  - from: "XARM2_C6"
+    to: "XARM2_CONV2_DROP"
+    command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR 2"
+    vendor: "lite6"
+    robot: "XARM2"
 
-# ==================== NOTES ====================
-# TODO: Fill in actual robot positions from each robot's config file
-# TODO: Add all robot-to-robot connections based on your testbed layout
-# TODO: Add all possible robot-to-exit connections
-# TODO: Verify command templates match your vendor factory parsing logic
-#
-# Command Template Variables:
-# - {column}: ASRS column (e.g., "C1", "C2", etc.)
-# - {row}: ASRS row (e.g., "R1", "R2", etc.)
-# - {source}: Source position for pickup
-# - {dest}: Destination position for drop
-#
-# Conveyor edges with null command_template represent passive conveyor transport
-# and don't generate robot commands - they're just graph connectivity
+  - from: "XARM2_CONV2_DROP"
+    to: "C2_PICKUP"
+    command_template: null
+    vendor: "conveyor"
+    robot: null

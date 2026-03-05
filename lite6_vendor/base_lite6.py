@@ -12,11 +12,15 @@ Date: 2026-01-05
 
 import rclpy
 from rclpy.node import Node
-from xarm_msgs.srv import SetInt16, SetInt16ById, MoveJoint, Call
+from xarm_msgs.srv import SetInt16, SetInt16ById, MoveJoint, MoveCartesian, Call
 import time
 import yaml
 import os
 import math
+try:
+    from xarm.wrapper import XArmAPI
+except Exception:
+    XArmAPI = None
 
 
 class BaseLite6:
@@ -39,6 +43,8 @@ class BaseLite6:
         self.robot_id = robot_id
         self.robot_ip = robot_ip
         self.namespace = "/ufactory"  # Standard namespace for Lite6
+        self.xarm_api = None
+        self.xarmapi_initialized = False
         
         # Load configuration
         if config_path is None:
@@ -80,37 +86,35 @@ class BaseLite6:
             with open(positions_file, 'r') as f:
                 positions_config = yaml.safe_load(f)
             
-            # ⭐ CRITICAL FIX: Convert all joint angles from degrees to radians
             robot_positions = positions_config.get(self.robot_id, {})
-            converted_positions = {}
-            
-            for position_name, position_data in robot_positions.items():
-                if isinstance(position_data, dict) and 'joints' in position_data:
-                    # Get joint angles in degrees
-                    joints_deg = position_data['joints']
-                    
-                    # Convert to radians
+            tcp_positions = robot_positions.get('positions', {})
+            asrs_grid = robot_positions.get('asrs_grid', {})
+            raw_joint_positions = robot_positions.get('joint_positions', {})
+
+            # Convert joint positions (degrees → radians)
+            joint_positions = {}
+            for name, data in raw_joint_positions.items():
+                if isinstance(data, dict) and 'joints' in data:
+                    joints_deg = data['joints']
                     joints_rad = self._degrees_to_radians(joints_deg)
-                    
-                    # Store converted position
-                    converted_positions[position_name] = {
+                    joint_positions[name] = {
                         'joints': joints_rad,
-                        'joints_deg': joints_deg,  # Keep original for reference
-                        'description': position_data.get('description', position_name),
-                        'type': position_data.get('type', 'UNKNOWN')
+                        'joints_deg': joints_deg,
+                        'tcp': data.get('tcp'),
+                        'description': data.get('description', name),
+                        'type': data.get('type', 'UNKNOWN')
                     }
-                    
-                    self.node.get_logger().debug(
-                        f"   Position '{position_name}': "
-                        f"{[f'{x:.1f}°' for x in joints_deg]} → "
-                        f"{[f'{x:.3f}rad' for x in joints_rad]}")
-            
+
             self.node.get_logger().info(
-                f"✅ Loaded {len(converted_positions)} positions (converted deg→rad)")
-            
+                f"✅ Loaded {len(joint_positions)} joint positions (deg→rad)")
+
             return {
                 'robot': robots_config.get(self.robot_id, {}),
-                'positions': converted_positions,
+                # Backwards-compatible: treat joint positions as primary positions.
+                'positions': joint_positions,
+                'joint_positions': joint_positions,
+                'tcp_positions': tcp_positions,
+                'asrs_grid': asrs_grid,
                 'metadata': robots_config.get('metadata', {})
             }
             
@@ -118,11 +122,19 @@ class BaseLite6:
             self.node.get_logger().error(f"❌ Failed to load config: {e}")
             import traceback
             self.node.get_logger().error(traceback.format_exc())
-            return {'robot': {}, 'positions': {}, 'metadata': {}}
+            return {
+                'robot': {},
+                'positions': {},
+                'joint_positions': {},
+                'tcp_positions': {},
+                'asrs_grid': {},
+                'metadata': {}
+            }
     
     def _setup_services(self):
         """Setup ROS2 service clients for robot control."""
         self.node.get_logger().info(f"⏳ Setting up service clients for {self.robot_id}...")
+        self.service_ready = {}
         
         # Error and state management
         self.clean_error_client = self.node.create_client(
@@ -140,50 +152,120 @@ class BaseLite6:
         # Motion control
         self.move_joint_client = self.node.create_client(
             MoveJoint, f'{self.namespace}/set_servo_angle')
+        self.move_cartesian_client = self.node.create_client(
+            MoveCartesian, f'{self.namespace}/set_position')
         
-        # Gripper control
-        self.open_gripper_client = self.node.create_client(
-            Call, f'{self.namespace}/open_lite6_gripper')
-        
-        self.close_gripper_client = self.node.create_client(
-            Call, f'{self.namespace}/close_lite6_gripper')
-        
-        # Wait for all services
+        # Gripper control handled by XArmAPI directly (no ROS2 service needed)
+
+        # Wait for core services
         self.node.get_logger().info("⏳ Waiting for robot services...")
-        services = [
-            self.clean_error_client,
-            self.motion_enable_client,
-            self.set_mode_client,
-            self.set_state_client,
-            self.move_joint_client,
-            self.open_gripper_client,
-            self.close_gripper_client
-        ]
-        
-        for service in services:
-            service.wait_for_service(timeout_sec=10.0)
-        
+        services = {
+            'clean_error': self.clean_error_client,
+            'motion_enable': self.motion_enable_client,
+            'set_mode': self.set_mode_client,
+            'set_state': self.set_state_client,
+            'move_joint': self.move_joint_client,
+            'move_cartesian': self.move_cartesian_client
+        }
+
+        for name, service in services.items():
+            ready = self._wait_for_service(name, service, timeout_total=60.0, step=2.0)
+            self.service_ready[name] = ready
+            if not ready:
+                self.node.get_logger().error(
+                    f"❌ [{self.robot_id}] Service not available: {service.srv_name}")
+
         self.node.get_logger().info("✅ All services connected")
+
+    def _ensure_xarmapi(self) -> bool:
+        """
+        Lazily initialize XArmAPI for gripper control fallback.
+        """
+        if self.xarm_api is not None:
+            return True
+        if XArmAPI is None:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] XArmAPI not available for gripper fallback")
+            return False
+        try:
+            self.node.get_logger().info(
+                f"🔌 [{self.robot_id}] Connecting XArmAPI for gripper control...")
+            self.xarm_api = XArmAPI(self.robot_ip, baud_checkset=False)
+            return True
+        except Exception as e:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] Failed to init XArmAPI: {e}")
+            return False
+
+    def _ensure_xarmapi_initialized(self) -> bool:
+        """
+        Ensure XArmAPI is connected and initialized for motion.
+        """
+        if self.xarmapi_initialized:
+            return True
+        if not self._ensure_xarmapi():
+            return False
+        try:
+            self.node.get_logger().info(
+                f"🔧 [{self.robot_id}] Initializing XArmAPI motion state...")
+            self.xarm_api.clean_error()
+            time.sleep(0.2)
+            self.xarm_api.motion_enable(enable=True)
+            time.sleep(0.2)
+            self.xarm_api.set_mode(0)
+            time.sleep(0.1)
+            self.xarm_api.set_state(state=0)
+            time.sleep(0.1)
+            self.xarm_api.set_joint_maxacc(200)
+            time.sleep(0.1)
+            self.xarmapi_initialized = True
+            return True
+        except Exception as e:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] XArmAPI init failed: {e}")
+            return False
+
+    def _wait_for_service(self, name, client, timeout_total: float = 60.0, step: float = 2.0) -> bool:
+        """
+        Wait for a service with periodic logging.
+        """
+        waited = 0.0
+        while waited < timeout_total:
+            if client.wait_for_service(timeout_sec=step):
+                return True
+            waited += step
+            self.node.get_logger().warn(
+                f"⏳ [{self.robot_id}] Waiting for service '{name}': {client.srv_name} ({int(waited)}s)")
+        return False
     
     def _call_service_sync(self, client, request, timeout: float = 30.0):
         """
         Call a service synchronously and wait for response.
-        
+
+        Waits for the future to resolve without spinning — the main thread's
+        rclpy.spin() handles callback processing.
+
         Args:
             client: Service client
             request: Service request
             timeout: Maximum time to wait for response
-            
+
         Returns:
             Service response or None if failed
         """
         future = client.call_async(request)
-        rclpy.spin_until_future_complete(self.node, future, timeout_sec=timeout)
-        
+
+        end_time = time.time() + timeout
+        while not future.done():
+            if time.time() > end_time:
+                self.node.get_logger().error(f"❌ Service call timeout: {client.srv_name}")
+                return None
+            time.sleep(0.05)
+
         if future.result() is not None:
             return future.result()
         else:
-            self.node.get_logger().error(f"❌ Service call timeout: {client.srv_name}")
+            self.node.get_logger().error(f"❌ Service call failed: {client.srv_name}")
             return None
     
     # ==================== ROBOT STATE MANAGEMENT ====================
@@ -282,9 +364,9 @@ class BaseLite6:
         return success
     
     # ==================== MOTION CONTROL ====================
-    
-    def move_joints(self, joint_angles: list, speed: float = 30.0, 
-                    acceleration: float = 100.0, description: str = "") -> bool:
+
+    def move_joints(self, joint_angles: list, speed: float = 100.0,
+                    acceleration: float = 200.0, description: str = "") -> bool:
         """
         Move robot to specified joint angles.
         
@@ -321,7 +403,7 @@ class BaseLite6:
         
         if result and result.ret == 0:
             self.node.get_logger().info(f"✅ [{self.robot_id}] Movement completed: {description}")
-            time.sleep(0.5)  # Settling time
+            time.sleep(0.1)  # Settling time
             return True
         else:
             ret_code = result.ret if result else "timeout"
@@ -329,8 +411,8 @@ class BaseLite6:
                 f"❌ [{self.robot_id}] Movement failed: {description} (code: {ret_code})")
             return False
     
-    def move_to_position(self, position_name: str, speed: float = 30.0, 
-                        acceleration: float = 100.0) -> bool:
+    def move_to_position(self, position_name: str, speed: float = 500.0, 
+                        acceleration: float = 500.0) -> bool:
         """
         Move to a named position from configuration.
         
@@ -342,10 +424,18 @@ class BaseLite6:
         Returns:
             True if movement successful, False otherwise
         """
-        # Get position from config (already converted to radians)
+        # Get joint position from config (already converted to radians)
         position_data = self.config['positions'].get(position_name)
+        if position_data is None and isinstance(position_name, str):
+            # Try uppercase joint position (e.g., HOME)
+            position_data = self.config['positions'].get(position_name.upper())
         
         if position_data is None:
+            # Fallback to TCP positions (e.g., home)
+            if self.config['tcp_positions'].get(position_name):
+                return self.move_to_tcp_position(position_name, speed=speed, acceleration=acceleration)
+            if isinstance(position_name, str) and self.config['tcp_positions'].get(position_name.lower()):
+                return self.move_to_tcp_position(position_name.lower(), speed=speed, acceleration=acceleration)
             self.node.get_logger().error(
                 f"❌ [{self.robot_id}] Position '{position_name}' not found in config")
             return False
@@ -359,49 +449,183 @@ class BaseLite6:
             return False
         
         return self.move_joints(joint_angles, speed, acceleration, description)
+
+    def move_to_joint_position(self, position_name: str, speed: float = 50.0,
+                               acceleration: float = 200.0) -> bool:
+        """
+        Move to a named joint position from configuration.
+        """
+        position_data = self.config['joint_positions'].get(position_name)
+        if position_data is None:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] Joint position '{position_name}' not found in config")
+            return False
+        joint_angles = position_data.get('joints')
+        description = position_data.get('description', position_name)
+        if joint_angles is None:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] No joint angles for position '{position_name}'")
+            return False
+        return self.move_joints(joint_angles, speed, acceleration, description)
+
+    def move_tcp(self, pose: list, speed: float = 500.0, acceleration: float = 500.0,
+                 description: str = "") -> bool:
+        """
+        Move robot to a TCP pose using Cartesian motion.
+        Pose format: [X, Y, Z, Roll, Pitch, Yaw]
+        """
+        if description:
+            self.node.get_logger().info(f"🦾 [{self.robot_id}] Moving TCP: {description}")
+        else:
+            self.node.get_logger().info(f"🦾 [{self.robot_id}] Moving TCP")
+
+        if not self.service_ready.get('move_cartesian', False):
+            self.service_ready['move_cartesian'] = self._wait_for_service(
+                'move_cartesian', self.move_cartesian_client, timeout_total=10.0, step=1.0)
+        if not self.service_ready.get('move_cartesian', False):
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] Cartesian service not available: {self.move_cartesian_client.srv_name}")
+            return False
+        
+        req = MoveCartesian.Request()
+        req.pose = pose
+        req.speed = speed
+        req.acc = acceleration
+        req.mvtime = 0.0
+        req.wait = True
+        req.timeout = 30.0
+
+        self.node.get_logger().info(f"   TCP pose: {pose}")
+        result = self._call_service_sync(self.move_cartesian_client, req, timeout=35.0)
+        if result and result.ret == 0:
+            time.sleep(0.5)
+            return True
+        ret_code = result.ret if result else "timeout"
+        self.node.get_logger().error(
+            f"❌ [{self.robot_id}] TCP move failed: {description} (code: {ret_code})")
+
+        # Fallback to XArmAPI if available
+        if self._ensure_xarmapi_initialized():
+            try:
+                self.node.get_logger().warn(
+                    f"⚠️  [{self.robot_id}] Retrying TCP move via XArmAPI: {description}")
+                code = self.xarm_api.set_position(
+                    pose[0], pose[1], pose[2], pose[3], pose[4], pose[5],
+                    speed=speed, mvacc=acceleration, wait=True, radius=0.0, is_radian=False
+                )
+                if code == 0:
+                    time.sleep(0.5)
+                    return True
+                self.node.get_logger().error(
+                    f"❌ [{self.robot_id}] XArmAPI TCP move failed: {description} (code: {code})")
+            except Exception as e:
+                self.node.get_logger().error(
+                    f"❌ [{self.robot_id}] XArmAPI TCP move exception: {e}")
+        return False
+
+    def move_tcp_xarmapi(self, pose: list, speed: float = 500.0, acceleration: float = 500.0,
+                         description: str = "") -> bool:
+        """
+        Move TCP using XArmAPI directly (degrees, mm).
+        """
+        if not self._ensure_xarmapi_initialized():
+            return False
+        if description:
+            self.node.get_logger().info(f"🦾 [{self.robot_id}] XArmAPI TCP: {description}")
+        self.node.get_logger().info(f"   TCP pose: {pose}")
+        code = self.xarm_api.set_position(
+            pose[0], pose[1], pose[2], pose[3], pose[4], pose[5],
+            speed=speed, mvacc=acceleration, wait=True, radius=0.0, is_radian=False
+        )
+        if code == 0:
+            time.sleep(0.5)
+            return True
+        self.node.get_logger().error(
+            f"❌ [{self.robot_id}] XArmAPI TCP move failed: {description} (code: {code})")
+        return False
+
+    def move_joints_xarmapi(self, joint_angles_deg: list, speed: float = 20.0,
+                            acceleration: float = 200.0, description: str = "") -> bool:
+        """
+        Move joints using XArmAPI directly (degrees).
+        """
+        if not self._ensure_xarmapi_initialized():
+            return False
+        dof = int(self.config.get('robot', {}).get('hardware', {}).get('dof', 6))
+        angles = list(joint_angles_deg)
+        if len(angles) > dof:
+            self.node.get_logger().warn(
+                f"⚠️  [{self.robot_id}] Trimming joint list from {len(angles)} to {dof} values for Lite6")
+            angles = angles[:dof]
+        elif len(angles) < dof:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] Joint list has {len(angles)} values, expected {dof}")
+            return False
+        if description:
+            self.node.get_logger().info(f"🦾 [{self.robot_id}] XArmAPI joints: {description}")
+        self.node.get_logger().info(f"   Joint angles (deg): {angles}")
+        code = self.xarm_api.set_servo_angle(
+            angle=angles,
+            speed=speed,
+            mvacc=acceleration,
+            wait=True,
+            radius=0.0,
+            is_radian=False
+        )
+        if code == 0:
+            time.sleep(0.5)
+            return True
+        self.node.get_logger().error(
+            f"❌ [{self.robot_id}] XArmAPI joint move failed: {description} (code: {code})")
+        return False
+
+    def move_to_tcp_position(self, position_name: str, speed: float = 500.0,
+                             acceleration: float = 500.0) -> bool:
+        """
+        Move to a named TCP position from configuration.
+        """
+        position_data = self.config['tcp_positions'].get(position_name)
+        if position_data is None:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] TCP position '{position_name}' not found in config")
+            return False
+        pose = position_data.get('pose')
+        description = position_data.get('description', position_name)
+        if pose is None:
+            self.node.get_logger().error(
+                f"❌ [{self.robot_id}] No TCP pose for position '{position_name}'")
+            return False
+        return self.move_tcp(pose, speed, acceleration, description)
     
     # ==================== GRIPPER CONTROL ====================
     
     def vacuum_on(self) -> bool:
-        """
-        Activate vacuum gripper (pick up object).
-        
-        Returns:
-            True if vacuum activated successfully
-        """
+        """Activate gripper (pick up object) via XArmAPI."""
         self.node.get_logger().info(f"🔵 [{self.robot_id}] Activating vacuum (PICK)...")
-        req = Call.Request()
-        result = self._call_service_sync(self.open_gripper_client, req, timeout=5.0)
-        
-        if result and result.ret == 0:
-            # Wait for vacuum to stabilize
-            vacuum_time = self.config['robot'].get('operating_parameters', {}).get(
-                'vacuum_activation_time', 0.5)
-            time.sleep(vacuum_time)
-            
-            self.node.get_logger().info(f"✅ [{self.robot_id}] Vacuum ON")
-            return True
-        else:
-            self.node.get_logger().error(f"❌ [{self.robot_id}] Failed to activate vacuum")
+        if not self._ensure_xarmapi():
+            self.node.get_logger().error(f"❌ [{self.robot_id}] XArmAPI not available for gripper")
             return False
-    
-    def vacuum_off(self) -> bool:
-        """
-        Deactivate vacuum gripper (release object).
-        
-        Returns:
-            True if vacuum deactivated successfully
-        """
-        self.node.get_logger().info(f"🔴 [{self.robot_id}] Deactivating vacuum (RELEASE)...")
-        req = Call.Request()
-        result = self._call_service_sync(self.close_gripper_client, req, timeout=5.0)
-        
-        if result and result.ret == 0:
-            time.sleep(0.3)
-            self.node.get_logger().info(f"✅ [{self.robot_id}] Vacuum OFF")
+        try:
+            self.xarm_api.close_lite6_gripper()
+            self.node.get_logger().info(f"✅ [{self.robot_id}] Gripper closed")
             return True
-        else:
-            self.node.get_logger().error(f"❌ [{self.robot_id}] Failed to deactivate vacuum")
+        except Exception as e:
+            self.node.get_logger().error(f"❌ [{self.robot_id}] Close gripper failed: {e}")
+            return False
+
+    def vacuum_off(self) -> bool:
+        """Deactivate gripper (release object) via XArmAPI."""
+        self.node.get_logger().info(f"🔴 [{self.robot_id}] Deactivating vacuum (RELEASE)...")
+        if not self._ensure_xarmapi():
+            self.node.get_logger().error(f"❌ [{self.robot_id}] XArmAPI not available for gripper")
+            return False
+        try:
+            self.xarm_api.open_lite6_gripper()
+            self.node.get_logger().info(f"✅ [{self.robot_id}] Gripper opened")
+            return True
+        except Exception as e:
+            self.node.get_logger().error(f"❌ [{self.robot_id}] Open gripper failed: {e}")
+            return False
             return False
     
     # ==================== UTILITY FUNCTIONS ====================
@@ -417,6 +641,31 @@ class BaseLite6:
             Dictionary with position info (angles in radians) or None if not found
         """
         return self.config['positions'].get(position_name)
+
+    def get_joint_position(self, position_name: str) -> dict:
+        """Get joint position info by name."""
+        return self.config['joint_positions'].get(position_name)
+
+    def get_joint_position_deg(self, position_name: str):
+        """Get joint angles in degrees by name."""
+        info = self.config['joint_positions'].get(position_name)
+        if not info:
+            return None
+        return info.get('joints_deg')
+
+    def get_tcp_position(self, position_name: str) -> dict:
+        """Get TCP position info by name."""
+        return self.config['tcp_positions'].get(position_name)
+
+    def get_asrs_pose(self, column: int, row: int):
+        """
+        Get ASRS grid pose for a given column/row.
+        """
+        key = f'c{column}'
+        grid = self.config['asrs_grid'].get(key, [])
+        if row < 1 or row > len(grid):
+            return None
+        return grid[row - 1]
     
     def get_robot_info(self) -> dict:
         """Get robot configuration information."""
@@ -432,7 +681,11 @@ class BaseLite6:
         Returns:
             True if position exists in this robot's config
         """
-        return position_name in self.config['positions']
+        return (
+            position_name in self.config['positions'] or
+            position_name in self.config['tcp_positions'] or
+            position_name in self.config['joint_positions']
+        )
 
 
 # ==================== STANDALONE TEST ====================

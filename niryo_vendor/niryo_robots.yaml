@@ -45,7 +45,7 @@ robot_2:
     - place
     - classify  # Has camera for classification
     - route     # Routes to different downstream paths
-  has_camera: true
+  has_camera: false
   vacuum_tool_id: 32
   workspace_positions:
     - home_joints

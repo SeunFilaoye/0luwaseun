@@ -16,10 +16,12 @@ Date: 2026-01-11
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import String
 from base_lite6 import BaseLite6
 import time
 import threading
+import re
 from queue import Queue
 import os
 
@@ -52,16 +54,34 @@ class Lite6RobotNode(Node):
         config_path = os.path.join(os.path.dirname(__file__))
         self.base = BaseLite6(self, robot_id, robot_ip, config_path)
         
-        # Get operating parameters
+        # Get operating parameters from lite6_robots.yaml
         self.params = self.base.get_robot_info().get('operating_parameters', {})
-        self.default_speed = self.params.get('default_speed', 30.0)
-        self.safe_speed = self.params.get('safe_speed', 20.0)
+        self.joint_speed = self.params.get('joint_speed_deg', 50.0)
+        self.joint_acceleration = self.params.get('joint_acceleration_deg', 500.0)
+        self.home_joint_speed = self.params.get('home_joint_speed_deg', self.joint_speed)
+        self.home_joint_acceleration = self.params.get(
+            'home_joint_acceleration_deg', self.joint_acceleration)
+        self.tcp_speed = self.params.get('tcp_speed_mm', 100.0)
+        self.tcp_acceleration = self.params.get('tcp_acceleration_mm', 2000.0)
+        self.precise_speed = self.params.get('precise_placement_speed', 50.0)
+        self.asrs_approach_speed = self.params.get('asrs_approach_speed_mm', self.tcp_speed)
+        self.asrs_approach_acceleration = self.params.get(
+            'asrs_approach_acceleration_mm', self.tcp_acceleration)
+        self.asrs_home_to_approach_speed = self.params.get(
+            'asrs_home_to_approach_speed_mm', self.tcp_speed)
+        self.asrs_home_to_approach_acceleration = self.params.get(
+            'asrs_home_to_approach_acceleration_mm', self.tcp_acceleration)
+        self.asrs_insert_speed = self.params.get('asrs_insert_speed_mm', self.tcp_speed)
+        self.asrs_insert_acceleration = self.params.get(
+            'asrs_insert_acceleration_mm', self.tcp_acceleration)
         
         # Command queue for sequential processing
         self.command_queue = Queue()
         
         # Current status
         self.current_status = "IDLE"
+        self.initialized = False
+        self.use_xarmapi_motion = True
         
         # Setup communication
         self._setup_topics()
@@ -98,10 +118,12 @@ class Lite6RobotNode(Node):
         )
         
         # Status publisher (publishes current state)
+        # Transient local ensures late-joining subscribers receive the last status
+        status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status_pub = self.create_publisher(
             String,
             f'/{self.robot_id}/status',
-            10
+            status_qos
         )
         
         self.get_logger().info(f"   Subscribed to: /{self.robot_id}/command")
@@ -168,17 +190,21 @@ class Lite6RobotNode(Node):
                 self.get_logger().warn(f"{'='*60}\n")
                 
                 # Execute command
-                self._execute_command(command)
+                success = self._execute_command(command)
                 
                 # Mark task as done
                 self.command_queue.task_done()
                 
-                self.get_logger().warn(f"\n{'='*60}")
-                self.get_logger().warn(f"🏁 COMPLETED: {command}")
-                self.get_logger().warn(f"{'='*60}\n")
-                
-                # Publish DONE status
-                self._publish_status("DONE")
+                if success:
+                    self.get_logger().warn(f"\n{'='*60}")
+                    self.get_logger().warn(f"🏁 COMPLETED: {command}")
+                    self.get_logger().warn(f"{'='*60}\n")
+                    self._publish_status("DONE")
+                else:
+                    self.get_logger().error(f"\n{'='*60}")
+                    self.get_logger().error(f"🛑 FAILED: {command}")
+                    self.get_logger().error(f"{'='*60}\n")
+                    self._publish_status("ERROR")
                 time.sleep(0.5)
                 
                 # Return to IDLE
@@ -206,13 +232,14 @@ class Lite6RobotNode(Node):
         command = command.strip()
         
         if command.upper() == 'INITIALIZE':
-            self._handle_initialize()
+            return self._handle_initialize()
         
         elif '|' in command and 'PICKUP' in command.upper() and 'DROP' in command.upper():
-            self._handle_pick_place(command)
+            return self._handle_pick_place(command)
         
         else:
             self.get_logger().error(f"❌ Unknown command format: {command}")
+            return False
     
     # ==================== COMMAND HANDLERS ====================
     
@@ -221,19 +248,27 @@ class Lite6RobotNode(Node):
         self.get_logger().info(f"🔧 [{self.robot_id}] Initializing...")
         self._publish_status("INITIALIZING")
         
-        # Initialize robot hardware
-        if not self.base.initialize_robot():
-            self.get_logger().error(f"❌ [{self.robot_id}] Initialization failed")
-            return False
+        # Initialize robot hardware (ROS)
+        ros_ok = self.base.initialize_robot()
+        if not ros_ok:
+            self.get_logger().warn(f"⚠️  [{self.robot_id}] ROS init failed, continuing with XArmAPI")
         
         # Ensure gripper is off
         self.base.vacuum_off()
         
+        # Initialize XArmAPI motion state (for TCP/joint moves)
+        xarm_ok = self.base._ensure_xarmapi_initialized()
+
         # Move to home position
-        success = self.base.move_to_position('home', speed=self.safe_speed)
-        
-        if success:
+        success = False
+        if self.base.get_joint_position('HOME'):
+            success = self._move_joint_named('HOME', speed=self.joint_speed)
+        else:
+            success = self.base.move_to_position('home', speed=self.joint_speed)
+
+        if ros_ok or xarm_ok:
             self.get_logger().info(f"✅ [{self.robot_id}] Initialized")
+            self.initialized = True
         
         return success
     
@@ -265,7 +300,7 @@ class Lite6RobotNode(Node):
         self.get_logger().info(f"   Robot ID: {robot_id}")
         self.get_logger().info(f"   Pickup: {pickup_str}")
         self.get_logger().info(f"   Drop: {drop_str}")
-        
+
         # Parse pickup location
         pickup_position = self._parse_location(pickup_str, is_pickup=True)
         if not pickup_position:
@@ -290,7 +325,7 @@ class Lite6RobotNode(Node):
         success = self._place_to_position(drop_position)
         
         return success
-    
+
     def _parse_location(self, location_str: str, is_pickup: bool) -> str:
         """
         Parse location string to YAML position name.
@@ -357,12 +392,21 @@ class Lite6RobotNode(Node):
             return f"agv_{position}"
         
         elif location_type == 'CONVEYOR':
-            # Format: "CONVEYOR C2 P1" → "conveyor_c2_p1"
-            if len(parts) < 3:
+            # Simple format: "CONVEYOR 3" → "conveyor3_drop" (for drop operations)
+            # Full format: "CONVEYOR C2 P1" → "conveyor_c2_p1" (for pickup operations)
+            if len(parts) == 2:
+                # Simple format: just conveyor number
+                conveyor_num = parts[1].replace('C', '').replace('c', '')
+                if is_pickup:
+                    return f"conveyor{conveyor_num}_pickup"
+                else:
+                    return f"conveyor{conveyor_num}_drop"
+            elif len(parts) >= 3:
+                conveyor = parts[1].lower()  # "C2" → "c2"
+                position = parts[2].lower()  # "P1" → "p1"
+                return f"conveyor_{conveyor}_{position}"
+            else:
                 return None
-            conveyor = parts[1].lower()  # "C2" → "c2"
-            position = parts[2].lower()  # "P1" → "p1"
-            return f"conveyor_{conveyor}_{position}"
         
         else:
             self.get_logger().error(f"❌ Unknown location type: {location_type}")
@@ -373,19 +417,148 @@ class Lite6RobotNode(Node):
     def _pick_from_position(self, position_name: str, speed: float = None) -> bool:
         """
         Pick an item from specified position.
-        
+
         Args:
             position_name: YAML position name (e.g., "asrs_c1_r5", "conveyor_c2_p1")
             speed: Movement speed (None = use default)
-            
+
         Returns:
             True if successful
         """
         if speed is None:
-            speed = self.safe_speed
+            speed = self.joint_speed
         
         self.get_logger().info(f"📦 [{self.robot_id}] PICK from {position_name}")
         self._publish_status("PICKING")
+
+        # ASRS positions are stored in the ASRS grid, not in named positions
+        asrs_match = re.match(r'^asrs_c(\d+)_r(\d+)$', position_name)
+        if asrs_match:
+            column = int(asrs_match.group(1))
+            row = int(asrs_match.group(2))
+
+            approach_key = f'C{column}_approach'
+            approach_info = self.base.get_tcp_position(approach_key)
+            target_pose = self.base.get_asrs_pose(column, row)
+
+            if not approach_info or not target_pose:
+                self.get_logger().error(
+                    f"❌ Missing ASRS pose data for C{column}R{row} or {approach_key}")
+                return False
+
+            approach_pose = approach_info.get('pose')
+            if not approach_pose:
+                self.get_logger().error(f"❌ Missing TCP pose for {approach_key}")
+                return False
+
+            # Column 6 requires an extra pre_approach waypoint for ASRS clearance.
+            pre_approach_info = None
+            if column == 6:
+                pre_approach_info = self.base.get_tcp_position('C6_pre_approach')
+                if not pre_approach_info:
+                    self.get_logger().error("❌ Missing C6_pre_approach position data")
+                    return False
+
+            # 1. Move to HOME in joint space as the global safe reset pose.
+            # Do not continue if HOME is unreachable, otherwise follow-on TCP paths can self-collide.
+            if not self._move_home_safe():
+                return False
+
+            self._publish_status("IN_TRANSIT")
+
+            # 1b. Column 6 only: pass through C6_pre_approach before C6_approach.
+            if pre_approach_info is not None:
+                pre_joints_deg = pre_approach_info.get('joints')
+                pre_pose = pre_approach_info.get('pose')
+                if pre_joints_deg and self.base._ensure_xarmapi_initialized():
+                    if not self.base.move_joints_xarmapi(
+                            pre_joints_deg, speed=self.joint_speed,
+                            acceleration=self.joint_acceleration,
+                            description="ASRS C6 pre_approach"):
+                        return False
+                elif pre_pose:
+                    if not self._move_tcp(pre_pose, speed=self.tcp_speed,
+                                          acceleration=self.tcp_acceleration,
+                                          description="ASRS C6 pre_approach"):
+                        return False
+
+            # 2. Move to column approach waypoint.
+            # Use joint move if joint angles exist in position data (avoids C24 on extended poses),
+            # otherwise fall back to TCP.
+            approach_joints_deg = approach_info.get('joints')
+            if approach_joints_deg and self.base._ensure_xarmapi_initialized():
+                if not self.base.move_joints_xarmapi(
+                        approach_joints_deg, speed=self.joint_speed,
+                        acceleration=self.joint_acceleration,
+                        description=f"ASRS C{column} approach"):
+                    return False
+            else:
+                if not self._move_tcp(approach_pose, speed=self.tcp_speed,
+                                      acceleration=self.tcp_acceleration,
+                                      description=f"ASRS C{column} approach"):
+                    return False
+
+            # 3. Move to row approach at target Z
+            row_approach_pose = [
+                approach_pose[0], approach_pose[1], target_pose[2],
+                approach_pose[3], approach_pose[4], approach_pose[5]
+            ]
+            if not self._move_tcp(row_approach_pose, speed=self.asrs_approach_speed, acceleration=self.asrs_approach_acceleration,
+                                  description=f"ASRS C{column}R{row} row approach"):
+                return False
+
+            # 4. Move to pick
+            if not self._move_tcp(target_pose, speed=self.asrs_insert_speed, acceleration=self.asrs_insert_acceleration,
+                                  description=f"ASRS C{column}R{row} pick"):
+                return False
+            time.sleep(0.5)
+
+            # 5. Activate gripper
+            if not self.base.vacuum_on():
+                return False
+
+            time.sleep(0.5)
+
+            # 6. Return to row approach
+            if not self._move_tcp(row_approach_pose, speed=self.asrs_insert_speed, acceleration=self.asrs_insert_acceleration,
+                                  description=f"ASRS C{column}R{row} retreat"):
+                return False
+
+            # 6b. Column 6 only: fully retreat through C6_approach → C6_pre_approach → HOME
+            #     before proceeding to the drop location to ensure ASRS clearance.
+            if pre_approach_info is not None:
+                # Retreat to C6_approach
+                if approach_joints_deg and self.base._ensure_xarmapi_initialized():
+                    if not self.base.move_joints_xarmapi(
+                            approach_joints_deg, speed=self.joint_speed,
+                            acceleration=self.joint_acceleration,
+                            description="ASRS C6 retreat to approach"):
+                        return False
+                else:
+                    if not self._move_tcp(approach_pose, speed=self.tcp_speed,
+                                          acceleration=self.tcp_acceleration,
+                                          description="ASRS C6 retreat to approach"):
+                        return False
+                # Retreat to C6_pre_approach
+                pre_joints_deg = pre_approach_info.get('joints')
+                pre_pose = pre_approach_info.get('pose')
+                if pre_joints_deg and self.base._ensure_xarmapi_initialized():
+                    if not self.base.move_joints_xarmapi(
+                            pre_joints_deg, speed=self.joint_speed,
+                            acceleration=self.joint_acceleration,
+                            description="ASRS C6 retreat to pre_approach"):
+                        return False
+                elif pre_pose:
+                    if not self._move_tcp(pre_pose, speed=self.tcp_speed,
+                                          acceleration=self.tcp_acceleration,
+                                          description="ASRS C6 retreat to pre_approach"):
+                        return False
+                # Return HOME before place sequence begins
+                if not self._move_home_safe():
+                    return False
+
+            self.get_logger().info(f"✅ [{self.robot_id}] PICK completed from {position_name}")
+            return True
         
         # Verify position exists
         if not self.base.is_position_accessible(position_name):
@@ -420,19 +593,89 @@ class Lite6RobotNode(Node):
     def _place_to_position(self, position_name: str, speed: float = None) -> bool:
         """
         Place an item to specified position.
-        
+
         Args:
             position_name: YAML position name (e.g., "niryo_c1_c11", "agv_a11")
             speed: Movement speed (None = use default)
-            
+
         Returns:
             True if successful
         """
         if speed is None:
-            speed = self.safe_speed
+            speed = self.joint_speed
         
         self.get_logger().info(f"📥 [{self.robot_id}] PLACE to {position_name}")
         self._publish_status("IN_TRANSIT")
+
+        # AGV drop uses joint positions for safe approach/drop/escape
+        if position_name.lower().startswith('agv_'):
+            # Joint move to AGV approach
+            if not self._move_joint_named('AGV_approach', speed=self.joint_speed):
+                return False
+
+            # Linear TCP move to AGV drop
+            agv_drop = self.base.get_joint_position('AGV_drop')
+            if not agv_drop or not agv_drop.get('tcp'):
+                self.get_logger().error("❌ Missing AGV_drop TCP in config")
+                return False
+            if not self._move_tcp(agv_drop['tcp'], speed=self.tcp_speed, acceleration=self.tcp_acceleration,
+                                  description="AGV drop (TCP)"):
+                return False
+
+            self._publish_status("PLACING")
+            if not self.base.vacuum_off():
+                return False
+
+            # Linear TCP move to AGV escape
+            agv_escape = self.base.get_joint_position('AGV_escape')
+            if not agv_escape or not agv_escape.get('tcp'):
+                self.get_logger().error("❌ Missing AGV_escape TCP in config")
+                return False
+            if not self._move_tcp(agv_escape['tcp'], speed=self.tcp_speed, acceleration=self.tcp_acceleration,
+                                  description="AGV escape (TCP)"):
+                return False
+
+            # Signal READY after safe retreat
+            self._publish_status("READY")
+
+            # Return HOME for next command
+            if not self._move_home_safe():
+                return False
+
+            self.get_logger().info(f"✅ [{self.robot_id}] PLACE completed to {position_name}")
+            return True
+
+        # Conveyor drop uses joint positions (Conveyor1/Conveyor2/Conveyor4)
+        conveyor_num = None
+        if 'conveyor1' in position_name or 'conveyor_c1' in position_name:
+            conveyor_num = 1
+        elif 'conveyor2' in position_name or 'conveyor_c2' in position_name:
+            conveyor_num = 2
+        elif 'conveyor4' in position_name or 'conveyor_c4' in position_name:
+            conveyor_num = 4
+
+        if conveyor_num is not None:
+            approach_key = f'Conveyor{conveyor_num}_approach'
+            drop_key = f'Conveyor{conveyor_num}_drop'
+
+            if not self._move_joint_named('HOME', speed=self.joint_speed):
+                return False
+            if not self._move_joint_named(approach_key, speed=self.joint_speed):
+                return False
+            if not self._move_joint_named(drop_key, speed=self.joint_speed):
+                return False
+
+            self._publish_status("PLACING")
+            if not self.base.vacuum_off():
+                return False
+
+            # Always retreat away from the conveyor and return HOME before next command.
+            if not self._move_joint_named(approach_key, speed=self.joint_speed):
+                return False
+            if not self._move_home_safe():
+                return False
+            self.get_logger().info(f"✅ [{self.robot_id}] PLACE completed to {position_name}")
+            return True
         
         # Verify position exists
         if not self.base.is_position_accessible(position_name):
@@ -452,11 +695,61 @@ class Lite6RobotNode(Node):
         time.sleep(0.5)  # Allow item to settle
         
         # 3. Return to home
-        if not self.base.move_to_position('home', speed=speed):
+        if not self._move_home_safe():
             return False
         
         self.get_logger().info(f"✅ [{self.robot_id}] PLACE completed to {position_name}")
         return True
+
+    def _move_tcp(self, pose, speed: float, acceleration: float, description: str) -> bool:
+        """
+        Move TCP using XArmAPI when available, fallback to ROS services.
+        """
+        if self.use_xarmapi_motion and self.base._ensure_xarmapi_initialized():
+            ok = self.base.move_tcp_xarmapi(
+                pose, speed=speed, acceleration=acceleration, description=description)
+            if ok:
+                return True
+            # Retry via ROS service path
+            self.get_logger().warn(
+                f"⚠️  [{self.robot_id}] Retrying TCP move via ROS service path: {description}")
+            return self.base.move_tcp(pose, speed=speed, acceleration=acceleration, description=description)
+        return self.base.move_tcp(pose, speed=speed, acceleration=acceleration, description=description)
+
+    def _move_joint_named(self, position_name: str, speed: float, acceleration: float = None) -> bool:
+        """
+        Move to a named joint position using XArmAPI when available.
+        """
+        if acceleration is None:
+            acceleration = self.joint_acceleration
+        if self.use_xarmapi_motion and self.base._ensure_xarmapi_initialized():
+            joints_deg = self.base.get_joint_position_deg(position_name)
+            if joints_deg:
+                ok = self.base.move_joints_xarmapi(
+                    joints_deg, speed=speed, acceleration=acceleration, description=position_name)
+                if ok:
+                    return True
+                self.get_logger().warn(
+                    f"⚠️  [{self.robot_id}] XArmAPI joint move failed for {position_name}; retrying via ROS service")
+        return self.base.move_to_joint_position(position_name, speed=speed, acceleration=acceleration)
+
+    def _move_home_safe(self) -> bool:
+        """
+        Move robot to HOME using joint-space first. This is the preferred
+        recovery/transition path between tasks to avoid TCP self-collision paths.
+        """
+        if self.base.get_joint_position('HOME'):
+            if self._move_joint_named('HOME', speed=self.home_joint_speed,
+                                      acceleration=self.home_joint_acceleration):
+                return True
+            # Retry HOME at same speed
+            self.get_logger().warn(
+                f"⚠️  [{self.robot_id}] HOME move retry")
+            return self._move_joint_named('HOME', speed=self.home_joint_speed,
+                                          acceleration=self.home_joint_acceleration)
+        self.get_logger().warn(
+            f"⚠️  [{self.robot_id}] HOME joint config missing; falling back to TCP/legacy home move")
+        return self.base.move_to_position('home', speed=self.joint_speed)
 
 
 # ==================== MAIN ====================

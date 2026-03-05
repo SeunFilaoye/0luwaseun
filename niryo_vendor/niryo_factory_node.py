@@ -25,6 +25,7 @@ import time
 from queue import Queue
 import yaml
 import os
+import json
 
 
 class NiryoFactoryNode(Node):
@@ -39,8 +40,9 @@ class NiryoFactoryNode(Node):
         self.get_logger().info("🏭 NIRYO FACTORY NODE INITIALIZING")
         self.get_logger().info("=" * 60)
 
-        # Load robot configuration
+        # Load robot and conveyor configuration
         self._load_robot_config()
+        self._load_conveyor_config()
 
         # Command queue for sequential processing
         self.command_queue = Queue()
@@ -91,6 +93,25 @@ class NiryoFactoryNode(Node):
             self.robot_ids = [1, 2, 3, 4, 5, 6]
             self.get_logger().warn(f"   Using default robot IDs: {self.robot_ids}")
 
+    def _load_conveyor_config(self):
+        """Load conveyor configuration to determine IR trigger topics."""
+        self.conveyor_ids = []
+        try:
+            config_path = os.path.join(os.path.dirname(__file__), 'conveyors_config.yaml')
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+
+            for key in config.keys():
+                if key.startswith('conveyor_') and key.split('_')[1].isdigit():
+                    self.conveyor_ids.append(int(key.split('_')[1]))
+
+            self.conveyor_ids.sort()
+            self.get_logger().info(f"   Loaded {len(self.conveyor_ids)} conveyors: {self.conveyor_ids}")
+
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to load conveyor config: {e}")
+            self.conveyor_ids = []
+
     def _setup_topics(self):
         """Setup ROS2 publishers and subscribers."""
         self.get_logger().info("📡 Setting up topics...")
@@ -125,6 +146,15 @@ class NiryoFactoryNode(Node):
         self.create_subscription(String, '/niryo_factory/command',
                                 self._on_high_level_command, 10)
 
+        # IR trigger subscribers (conveyors → factory)
+        for cid in self.conveyor_ids:
+            topic = f'/niryo_factory/conveyor_{cid}/ir_trigger'
+            self.create_subscription(
+                String, topic,
+                lambda msg, conveyor_id=cid: self._on_ir_trigger(conveyor_id, msg),
+                10
+            )
+
         # Global status publisher (factory → external)
         self.global_status_pub = self.create_publisher(String, '/niryo_factory/status', 10)
 
@@ -137,6 +167,9 @@ class NiryoFactoryNode(Node):
         self.get_logger().info("   Subscribing to high-level commands: /niryo_factory/command")
         self.get_logger().info("   Publishing status to: /niryo_factory/status")
         self.get_logger().info("   Publishing ACKs to: /niryo_factory/ack")
+        if self.conveyor_ids:
+            topics = ', '.join([f"/niryo_factory/conveyor_{cid}/ir_trigger" for cid in self.conveyor_ids])
+            self.get_logger().info(f"   Subscribing to IR triggers: {topics}")
 
     # ==================== CALLBACK HANDLERS ====================
 
@@ -164,6 +197,10 @@ class NiryoFactoryNode(Node):
         self.robot_status[robot_id] = status
         self.get_logger().info(f"📊 [{robot_id}] STATUS: {status}")
 
+        # If Robot 6 reports READY (picked from AGV), notify superfactory
+        if robot_id == 'robot_6' and status.strip().upper() == 'READY':
+            self._publish_global_status("READY")
+
     def _on_high_level_command(self, msg):
         """
         Callback when high-level command is received.
@@ -181,6 +218,36 @@ class NiryoFactoryNode(Node):
 
         # Add to queue
         self.command_queue.put(command)
+
+    def _on_ir_trigger(self, conveyor_id: int, msg):
+        """
+        Handle IR trigger events from conveyors and notify superfactory.
+
+        Expected JSON:
+        {
+            'conveyor_id': int,
+            'timestamp': float,
+            'direction': str,
+            'triggers_robot': int | list,
+            'pickup_position': str
+        }
+        """
+        try:
+            data = json.loads(msg.data)
+            triggers_robot = data.get('triggers_robot')
+            pickup_position = data.get('pickup_position', 'UNKNOWN')
+
+            robot_ids = []
+            if isinstance(triggers_robot, list):
+                robot_ids = triggers_robot
+            elif isinstance(triggers_robot, int):
+                robot_ids = [triggers_robot]
+
+            for rid in robot_ids:
+                status = f"IR_READY | R{rid} | {pickup_position} | C{conveyor_id}"
+                self._publish_global_status(status)
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to parse IR trigger: {e}")
 
     # ==================== COMMAND PROCESSING ====================
 
@@ -280,18 +347,12 @@ class NiryoFactoryNode(Node):
 
     def _handle_pick_place_command(self, command: str):
         """
-        Handle pick and place command by parsing and routing to robot.
+        Handle pick and place command by routing to the target robot.
+        Dispatches execution to a background thread so the command processor
+        can immediately accept the next command (enables parallel robot execution).
 
         Format: "ROBOT_ID | PICKUP - LOCATION | DROP - LOCATION"
-
-        Examples:
-        - "R1 | PICKUP - P12 | DROP - C11"
-        - "R2 | PICKUP - P11 | DROP - D12"
-
-        Args:
-            command: Command string
         """
-        # Split by pipe separator
         parts = [p.strip() for p in command.split('|')]
 
         if len(parts) != 3:
@@ -302,23 +363,78 @@ class NiryoFactoryNode(Node):
         pickup_str = parts[1].strip()
         drop_str = parts[2].strip()
 
-        # Parse robot ID
         robot_id = self._parse_robot_id(robot_id_str)
 
         if not robot_id:
             self.get_logger().error(f"❌ Invalid robot ID: {robot_id_str}")
             return
 
-        self.get_logger().info(f"🎯 Routing command to {robot_id}")
+        self.get_logger().info(f"🎯 Dispatching {robot_id_str} in background thread")
         self._publish_global_status(f"{robot_id.upper()}_EXECUTING")
 
-        # Send FULL command to selected robot
-        self._send_command_to_robot(robot_id, command)
+        if robot_id == 'robot_6':
+            t = threading.Thread(
+                target=self._run_r6_command,
+                args=(robot_id, robot_id_str, pickup_str, drop_str),
+                daemon=True
+            )
+        else:
+            t = threading.Thread(
+                target=self._run_robot_command,
+                args=(robot_id, robot_id_str, command),
+                daemon=True
+            )
+        t.start()
+        # Return immediately — the command processor can pick up the next command
 
-        # Wait for completion
-        self._wait_for_robot_done(robot_id)
+    def _run_robot_command(self, robot_id: str, robot_id_str: str, command: str):
+        """Execute a pick/place command on a single robot and publish per-robot completion."""
+        try:
+            self._send_command_to_robot(robot_id, command)
+            self._wait_for_robot_done(robot_id)
+            self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
+        except Exception as e:
+            self.get_logger().error(f"❌ {robot_id_str} command failed: {e}")
 
-        self._publish_global_status("COMMAND_COMPLETE")
+    def _run_r6_command(self, robot_id: str, robot_id_str: str, pickup_str: str, drop_str: str):
+        """Execute R6 AGV pick sequence and publish per-robot completion."""
+        try:
+            if self._execute_robot6_agv_pick_sequence(pickup_str, drop_str):
+                self._wait_for_robot_done(robot_id)
+                self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
+                # Notify superfactory that AGV can return
+                self._publish_global_status("READY")
+            else:
+                self.get_logger().error("❌ Failed to build R6 AGV pick sequence")
+                self._publish_global_status("COMMAND_FAILED")
+        except Exception as e:
+            self.get_logger().error(f"❌ R6 command failed: {e}")
+
+    def _execute_robot6_agv_pick_sequence(self, pickup_str: str, drop_str: str) -> bool:
+        """
+        Build and send a multi-line sequence for Robot 6 to pick from AGV.
+
+        Sequence:
+        home -> pregrip_P12 -> P12 -> vacuum on -> pregrip_P12
+        -> D12 -> vacuum off -> home
+        """
+        pickup = self._parse_location(pickup_str, is_pickup=True)
+        drop = self._parse_location(drop_str, is_pickup=False)
+
+        if not pickup or not drop:
+            return False
+
+        pregrip_pos = f"pregrip_{pickup}"
+
+        # Format: SEQUENCE | pos1 -> pos2 -> ... | VACUUM:pull@pos | VACUUM:push@pos
+        sequence_cmd = (
+            f"SEQUENCE | home_joints -> {pregrip_pos} -> {pickup} -> {pregrip_pos} -> "
+            f"{drop} -> home_joints | VACUUM:pull@{pickup} | VACUUM:push@{drop}"
+        )
+
+        full_cmd = f"R6 | {sequence_cmd}"
+        self._send_command_to_robot('robot_6', full_cmd)
+        return True
 
     def _parse_robot_id(self, robot_id_str: str) -> str:
         """
@@ -345,6 +461,32 @@ class NiryoFactoryNode(Node):
                 return f'robot_{robot_num}'
 
         return None
+
+    def _parse_location(self, location_str: str, is_pickup: bool) -> str:
+        """
+        Parse location string to position key.
+
+        Format: "PICKUP - LOCATION" or "DROP - LOCATION"
+
+        Examples:
+        - "PICKUP - P12" → "P12"
+        - "DROP - C11" → "C11"
+        - "PICKUP - D12" → "D12"
+        """
+        if is_pickup:
+            if not location_str.upper().startswith('PICKUP'):
+                return None
+            location = location_str[6:].strip()  # Remove "PICKUP"
+            if location.startswith('-'):
+                location = location[1:].strip()
+        else:
+            if not location_str.upper().startswith('DROP'):
+                return None
+            location = location_str[4:].strip()  # Remove "DROP"
+            if location.startswith('-'):
+                location = location[1:].strip()
+
+        return location.strip()
 
     # ==================== ROBOT COMMUNICATION ====================
 

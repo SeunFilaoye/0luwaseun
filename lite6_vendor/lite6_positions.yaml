@@ -1,439 +1,280 @@
 # Lite6 Robot Position Configurations
-# This file defines all physical positions and their corresponding joint angles
-# for each Lite6 robot in the warehouse system.
-#
-# Structure:
-#   xarm<id>:
-#     position_key:
-#       joints: [j1, j2, j3, j4, j5, j6, j7]  # Joint angles in radians
-#       description: "Human-readable description"
-#       type: HOME | ASRS_PICKUP | ASRS_DROP | CONVEYOR_PICKUP | AGV_DROP | TRANSIT
-#
-# Note: All joint angles are in radians
-# Note: Lite6 has 6 DOF, but we keep 7 values for compatibility (last value is 0.0)
+# Poses are stored as [X, Y, Z, Roll, Pitch, Yaw]
+# Linear units: mm | Angular units: degrees
+# 
+# ASRS grid positions are stored as arrays indexed by row (0-9)
+# Access pattern: asrs_grid.c1[row_index] returns pose for that row
+
 
 xarm1:
-  # Robot IP: 192.168.0.170
-  # ASRS Access: Columns 1, 2, 3 (Rows 1-10)
+  ip: "192.168.0.170"
+  assigned_columns: [1, 2, 3]
   
-  # ==================== HOME & SAFE POSITIONS ====================
-  home:
-    joints: [-59.6, 5.8, 228.9, 107.2, 81, -230.3]
-    description: "Safe home position for xarm1"
-    type: HOME
-  
-  hold:
-    joints: [123.3, -33.6, 203.1, 93.2, 94.4, -354.4]
-    description: "Hold position after pickup"
-    type: TRANSIT
+  # ==================== JOINT POSITIONS (for smooth transitions) ====================
+  # Run: python3 record_joint_positions.py xarm1
+  # Then paste the recorded values here
+  joint_positions:
+    HOME:
+      tcp: [55.707706, 119.644005, 445.573883, -89.685198, -0.110524, -25.966676]
+      joints: [63.499996, -52.89999, 35.500007, 181.099984, 2.000024, -90.899983]
+      type: HOME
+      description: "Safe home position"
 
-  pre_pickup:
-    joints: [-76.5, -13.4, 228.9, 103, 70.2, -212.7]
-    description: "Hold position before pickup"
-    type: TRANSIT
-  
-  # ==================== ASRS POSITIONS - COLUMN 1 ====================
-  asrs_c1_r1:
-    joints: [-82, -15.4, 228.6, 100, 62.7, -207.1]  # PLACEHOLDER - Replace with actual taught position
-    description: "ASRS Column 1, Row 1 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r2:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 2 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r3:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 3 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r4:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 4 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r5:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 5 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r6:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 6 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r7:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 7 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r8:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 8 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r9:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 9 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c1_r10:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 1, Row 10 pickup position"
-    type: ASRS_PICKUP
-  
-  # ==================== ASRS POSITIONS - COLUMN 2 ====================
-  asrs_c2_r1:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 1 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r2:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 2 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r3:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 3 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r4:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 4 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r5:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 5 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r6:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 6 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r7:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 7 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r8:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 8 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r9:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 9 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c2_r10:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 2, Row 10 pickup position"
-    type: ASRS_PICKUP
-  
-  # ==================== ASRS POSITIONS - COLUMN 3 ====================
-  asrs_c3_r1:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 1 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r2:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 2 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r3:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 3 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r4:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 4 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r5:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 5 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r6:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 6 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r7:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 7 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r8:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 8 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r9:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 9 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c3_r10:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 3, Row 10 pickup position"
-    type: ASRS_PICKUP
-  
-  # ==================== CONVEYOR POSITIONS (PLACEHOLDER) ====================
-  niryo_c1_c11:
-    joints: [116.2, 73.9, 203.1, 135.7, 103, -329.5]  # PLACEHOLDER - To be filled later
-    description: "Conveyor pickup position"
-    type: CONVEYOR_PICKUP
-  
-  conveyor_approach:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "Approach position before conveyor pickup"
-    type: TRANSIT
-  
-  # ==================== AGV POSITIONS ====================
-  agv_drop:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER - Replace with actual taught position
-    description: "AGV drop-off position"
-    type: AGV_DROP
-  
-  agv_approach:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "Approach position before AGV drop"
-    type: TRANSIT
+    Conveyor1_approach:
+      tcp: [125,-252.2,293.9,126.2,-4.1,4]
+      joints: [-59.1,5.7,47.3,245.2,21.8,-314.1]
+      type: TRANSIT
+      description: "Approach position before conveyor 1"
+
+    Conveyor1_drop:
+      tcp: [125,-296.8,138.6,126.2,-4.1,4]
+      joints: [-64,46.5,57.6,203.5,43.8,-271.8]
+      type: TRANSIT
+      description: "Conveyor 1 drop off position"
+
+    Conveyor2_approach:
+      tcp: [-211.1,210.5,297.7,135.6,0.8,-132.5]
+      joints: [134.8,8.7,53.9,219.4,-1.1,-312.1]
+      type: TRANSIT
+      description: "Approach position before conveyor 2"
+
+    Conveyor2_drop:
+      tcp: [-243.9,249.1,127.6,116.1,-2.9,-121.3]
+      joints: [131.3,54.1,65.8,159.5,53,-263.5]
+      type: TRANSIT
+      description: "Conveyor 2 drop off position"
+      
+  # ==================== NAMED POSITIONS ====================
+  positions:
+    home:
+      pose: [55.7, 119.6, 445.6, -89.7, 0, -26]  
+      type: HOME
+      description: "Safe home position"
+    
+    hold:
+      pose: [25.9, 45.8, 462.7, 98.8, -0.8, 143.9]  
+      type: TRANSIT
+      description: "Hold position after pickup"
+    
+    pre_pickup:
+      pose: [25.9, 45.8, 462.7, 98.8, -0.8, 143.9]  
+      type: TRANSIT
+      description: "Hold position before pickup"
+    
+    conveyor_approach:
+      pose: [104.9, -266.8, 230, 130, 0.9, 9.8]  
+      type: TRANSIT
+      description: "Approach position before conveyor"
+    
+    C1_approach:
+      pose: [236.8,142.9,512.2,91.5,-0.2,-176.3]
+      joints: [18.2,6.6,92.4,89.8,75.1,-184.3]
+      type: TRANSIT
+      description: "Approach before column 1"
+
+    C2_approach:
+      pose: [-80.5,261.5,510.6,89.7,-1.1,142.7]
+      joints: [118.9,2.4,87.7,267.8,66.6,6.1]
+      type: TRANSIT
+      description: "Approach before column 2"
+
+    C3_approach:
+      pose: [-93.2,366.8,515.2,91.8,-3.9,138.2]
+      joints: [112.9,47.9,152.2,278.5,66,-12.9]
+      type: TRANSIT
+      description: "Approach before column 3"
+    
+
+  # ==================== ASRS GRID POSITIONS ====================
+  # Each column contains an array of 10 rows (index 0 = row 1, index 9 = row 10)
+  # Format: [X, Y, Z, Roll, Pitch, Yaw]
+  asrs_grid:
+    c1:  # Column 1, Rows 1-10
+      - [236.8,203,512.2,91.5,-0.2,-176.3]  # Row 1
+      - [234.5, 201, 466.8, -89.5, -0.8, 1.7]  # Row 2
+      - [234.5, 201, 419.4, -89.5, -0.8, 1.7]  # Row 3
+      - [234.5, 201, 375.9, -89.5, -0.8, 1.7]  # Row 4
+      - [234.5, 201, 331.6, -89.5, -0.8, 1.7]  # Row 5
+      - [234.5, 201, 286, -89.5, -0.8, 1.7]  # Row 6
+      - [234.5, 201, 241.4, -89.5, -0.8, 1.7]  # Row 7
+      - [234.5, 201, 196, -89.5, -0.8, 1.7]  # Row 8
+      - [234.5, 201, 152.1, -89.5, -0.8, 1.7]  # Row 9
+      - [234.5, 201, 107.8, -89.5, -0.8, 1.7]  # Row 10
+    
+    c2:  # Column 2, Rows 1-10
+      - [55.4,261.5,510.6,89.7,-1.1,142.7]  # Row 1
+      - [73.6, 245.8, 466.4, -90.5, -1.2, -33]  # Row 2
+      - [73.6, 245, 422.8, -90.5, -1.2, -33]  # Row 3
+      - [67.3, 254, 376.8, 90.6, 0.9, 142.8]  # Row 4
+      - [67.3, 254.7, 330.3, 90.6, 0.9, 142.8]  # Row 5
+      - [67.3, 254.5, 285.9, 90.6, 0.9, 142.8]  # Row 6
+      - [64.5, 250.1, 241.5, 90.6, 0.9, 142.8]  # Row 7
+      - [67.3, 254.9, 196.4, 90.6, 0.9, 142.8]  # Row 8
+      - [67.3, 255.2, 153.3, 90.6, 0.9, 142.8]  # Row 9
+      - [66.8, 255.3, 107.6, -91, -1.5, -38.2]  # Row 10
+    
+    c3:  # Column 3, Rows 1-10
+      - [-22.9,366.8,515.2,91.8,-3.9,138.2] # Row 1
+      - [-31.8, 374.8, 471.2, -91, 2, -59.8]  # Row 2
+      - [-26.9, 375.4, 427.8, -91, 2, -59.8]  # Row 3
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 4
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 5
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 6
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 7
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 8
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 9
+      - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Row 10
+
+
 
 
 xarm2:
-  # Robot IP: 192.168.0.183
-  # ASRS Access: Columns 4, 5, 6 (Rows 1-10)
-  
-  # ==================== HOME & SAFE POSITIONS ====================
-  home:
-    joints: [0.0, -0.4, 1.1, 0.0, 1.4, 0.0, 0.0]
-    description: "Safe home position for xarm2"
-    type: HOME
-  
-  hold:
-    joints: [0.0, -0.2, 0.8, 0.0, 1.0, 0.0, 0.0]
-    description: "Hold position after pickup"
-    type: TRANSIT
-  
-  # ==================== ASRS POSITIONS - COLUMN 4 ====================
-  asrs_c4_r1:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 1 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r2:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 2 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r3:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 3 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r4:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 4 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r5:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 5 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r6:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 6 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r7:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 7 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r8:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 8 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r9:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 9 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c4_r10:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 4, Row 10 pickup position"
-    type: ASRS_PICKUP
-  
-  # ==================== ASRS POSITIONS - COLUMN 5 ====================
-  asrs_c5_r1:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 1 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r2:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 2 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r3:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 3 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r4:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 4 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r5:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 5 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r6:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 6 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r7:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 7 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r8:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 8 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r9:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 9 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c5_r10:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 5, Row 10 pickup position"
-    type: ASRS_PICKUP
-  
-  # ==================== ASRS POSITIONS - COLUMN 6 ====================
-  asrs_c6_r1:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 1 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r2:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 2 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r3:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 3 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r4:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 4 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r5:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 5 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r6:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 6 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r7:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 7 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r8:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 8 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r9:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 9 pickup position"
-    type: ASRS_PICKUP
-  
-  asrs_c6_r10:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "ASRS Column 6, Row 10 pickup position"
-    type: ASRS_PICKUP
-  
-  # ==================== CONVEYOR POSITIONS (PLACEHOLDER) ====================
-  conveyor_pickup:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER - To be filled later
-    description: "Conveyor pickup position"
-    type: CONVEYOR_PICKUP
-  
-  conveyor_approach:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "Approach position before conveyor pickup"
-    type: TRANSIT
-  
-  # ==================== AGV POSITIONS ====================
-  agv_drop:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER - Replace with actual taught position
-    description: "AGV drop-off position"
-    type: AGV_DROP
-  
-  agv_approach:
-    joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # PLACEHOLDER
-    description: "Approach position before AGV drop"
-    type: TRANSIT
+  ip: "192.168.0.183"
+  assigned_columns: [4, 5, 6]
+
+  # ==================== JOINT POSITIONS (for smooth transitions) ====================
+  joint_positions:
+    HOME:
+      tcp: [-83.505905, -83.553123, 419.944, 90.258271, -5.065405, -44.490918]
+      joints: [-135.10001, -61.09999, 27.600007, -22.599976, -1.500004, -62.399974]
+    AGV_approach:
+      tcp: [-4.917997, 154.413254, 388.398254, 103.565846, -4.702035, 179.892934]
+      joints: [-269.563235, -47.799233, 27.600007, -22.599976, -1.500004, -62.399974]
+    AGV_drop:
+      tcp: [-4.608202, 179.827682, 99.819931, 117.59105, -3.214351, 178.400379]
+      joints: [-268.696293, 50.184113, 22.63338, 0.712817, -90.294138, -86.310018]
+    AGV_escape:
+      tcp: [-4.608194, 164.929901, 99.819931, 117.59105, -3.214351, 178.400379]
+      joints: [-268.519249, 51.144677, 19.548575, 0.84305, -94.337959, -86.168097]
+    Conveyor2_approach:
+      tcp: [-342.861511, 39.372028, 206.649063, 118.813284, -5.231334, -99.166733]
+      joints: [-186.753531, 34.877087, 59.942501, -0.494405, -36.694337, -84.39697]
+    Conveyor2_drop:
+      tcp: [-346.292664, 34.6003, 118.454994, 116.159343, -1.352066, -119.345275]
+      joints: [-181.622579, 56.564227, 67.774662, 30.091572, -54.547129, -95.218481]
+    Conveyor4_approach:
+      tcp: [-224.678696, 58.266556, 191.531937, 107.573055, 0.89496, -178.742607]
+      joints: [-179.88136, 28.310991, 38.956203, 92.175273, -72.921771, -102.150869]
+    Conveyor4_drop:
+      tcp: [-232.845856, 102.457314, 131.409546, 120.084505, 1.088391, 178.169592]
+      joints: [-191.894452, 44.305107, 47.45712, 82.01295, -59.852604, -94.877915]
 
 
-# Configuration metadata
-metadata:
-  version: "1.0"
-  date: "2026-01-05"
-  coordinate_system: "UFACTORY_CONVENTION"
-  joint_units: "radians"
-  description: "Physical position configurations for Lite6 robots in warehouse ASRS system"
-  
-  # Position type definitions
-  position_types:
-    HOME: "Default starting position for robot"
-    TRANSIT: "Intermediate safe position for motion planning"
-    ASRS_PICKUP: "Position to pick/place from ASRS rack"
-    ASRS_DROP: "Position to drop object to ASRS rack"
-    CONVEYOR_PICKUP: "Position to pick from conveyor (future)"
-    AGV_DROP: "Position to drop object onto AGV"
-  
-  # ASRS Grid Configuration
+  # ==================== NAMED POSITIONS ====================
+  positions:
+    home:
+      pose: [-83.4, -83.6, 420, 90.3, -5, -44]  # PLACEHOLDER
+      type: HOME
+      description: "Safe home position"
+    
+    hold:
+      pose: [-160.9, 32.4, 426.3, 99, 3.4, -99.7]  # PLACEHOLDER
+      type: TRANSIT
+      description: "Hold position after pickup"
+
+    conveyor2_drop:
+      pose: [-368.3, 65.3, 137.5, 129.5, 1.7, -98]  # PLACEHOLDER
+      type: TRANSIT
+      description: "Conveyor 2 drop off position"
+
+    conveyor4_drop:
+      pose: [-175.6, 137.1, 128.9, 122, 4.4, -125.4]  # PLACEHOLDER
+      type: TRANSIT
+      description: "Conveyor 3 drop off position"
+    
+    agv_drop:
+      pose: [-71, 259.2, 122.1, 133.8, 2.2, 89.6]  # PLACEHOLDER
+      type: AGV_DROP
+      description: "AGV drop-off position"
+    
+    agv_approach:
+      pose: [-22.6, 247.9, 314.5, 141.9, -2, -177.8]  # PLACEHOLDER
+      type: TRANSIT
+      description: "Approach before AGV drop"
+
+    C4_approach:
+      pose: [-201.2,-110.9,510.2,89.7,1.4,-23.2]
+      joints: [-163,-14.2,72.8,-86.9,-49.9,-6.4]
+      type: TRANSIT
+      description: "Approach before column 4"
+
+    C5_approach:
+      pose: [-7.1,-211.8,508.5,88,-1.3,-54.5]
+      joints: [-75.6,-14.7,71.2,-93.7,69.2,6.6]
+      type: TRANSIT
+      description: "Approach before column 5"
+
+    C6_approach:
+      pose: [8.2,-431.8,336.3,90,-2.4,-85.7]
+      joints: [-80.2,80.9,164.3,-89.6,95.2,9.3]
+      type: TRANSIT
+      description: "Approach before column 6"
+
+    C6_pre_approach:
+      pose: [115,-406.5,351.9,92.6,-2,-75.7]
+      joints: [-65.4,74.3,156.5,93.1,-99.8,-170.2]
+      type: TRANSIT
+      dsecription: "Approach the approach for column 6 - very carefully."
+
+# Column 6 is far away and may need a combination of movements to pick correctly.
+  # ==================== ASRS GRID POSITIONS ====================
   asrs_grid:
-    total_columns: 6
-    total_rows: 10
-    xarm1_columns: [1, 2, 3]
-    xarm2_columns: [4, 5, 6]
+    c4:  # Column 4, Rows 1-10 4-10 REDO
+      - [-217.3,-161.4,505.8,87.4,-2.2,-22.9]  # Row 1
+      - [-208,-165.5,464.3,89.6,-2.2,-24.2]  # Row 2
+      - [-241.3, -153, 417.9, 89.2, 0.2, -17.9]  # Row 3
+      - [-229, -157.4, 375.7, 89.3, -1.2, -17.7]  # Row 4
+      - [-229, -157.3, 331.9, 89.3, -1.2, -17.7]  # Row 5
+      - [-229, -159.1, 286.5, 89.3, -1.2, -17.7]  # Row 6
+      - [-229, -159, 241.7, 89.3, -1.2, -17.7]  # Row 7
+      - [-229, -159.4, 196.9, 89.3, -1.2, -17.7]  # Row 8
+      - [-229, -162.4, 152.1, 89.3, -1.2, -17.7]  # Row 9
+      - [-225.7, -162.9, 106.4, 89.3, -1.2, -17.7]  # Row 10
+    
+    c5:  # Column 5, Rows 1-10
+      - [-75.5,-269.3,507.9,88.5,-2.6,-57.2]  # Row 1
+      - [-97.2, -248.5, 468.1, 90.9, 0.7, -52.6]  # Row 2
+      - [-94.3, -252.5, 423.9, 90.9, 0.7, -52.6]  # Row 3
+      - [-81.6, -266.1, 371.2, 85.6, 0.2, -57.6]  # Row 4
+      - [-81.6, -263.9, 327.2, 85.6, 0.2, -57.6]  # Row 5
+      - [-81.6, -267.7, 282.4, 85.6, 0.2, -57.6]  # Row 6
+      - [-81.6, -271, 237.2, 85.6, 0.2, -57.6]  # Row 7
+      - [-81.9, -267.9, 192.9, 85.6, 0.2, -57.6]  # Row 8
+      - [-76.6, -270.5, 148, 85.6, 0.2, -57.6]  # Row 9
+      - [-77.9, -272.9, 101.6, 85.6, 0.2, -57.6]  # Row 10
+    
+    c6:  # Column 6, Rows 1-10
+      - [-37.1,-372.3,514.7,-90.4,0.4,115.9]  # Row 1
+      - [-37.3,-401.2,470.3,89.9,-0.7,-68.8]  # Row 2
+      - [-38.9, -388.7, 427.9, 92.1, -0.5, -71.9]  # Row 3
+      - [-35.2, -420.2, 383.6, 91.3, -1.2, -88.5]  # Row 4
+      - [-33.4,-431.8,336.3,90,-2.4,-85.7]  # Row 5
+      - [-33.5, -435.9, 291.7, 89.4, 3.3, -93.3]  # Row 6
+      - [-32.4, -437.4, 249, 90.7, -1.5, -94]  # Row 7
+      - [-30.1, -436.3, 202.2, 89.1, -4.2, -92.1]  # Row 8
+      - [-29.8, -431.2, 153.6, 87.4, -1.1, -87.5]  # Row 9
+      - [-27.1, -426.2, 113.2, 89.6, -4, -82.7]  # Row 10
+
+
+
+
+# ==================== METADATA ====================
+metadata:
+  version: "2.0"
+  date: "2026-02-03"
+  pose_format: "[X, Y, Z, Roll, Pitch, Yaw]"
+  linear_units: "mm"
+  angular_units: "degrees"
   
-  # Teaching Instructions
+  position_types:
+    HOME: "Default safe starting position"
+    TRANSIT: "Intermediate position for collision-free motion"
+    ASRS_PICKUP: "Position to pick/place from ASRS carousel"
+    CONVEYOR_PICKUP: "Position to pick from conveyor"
+    AGV_DROP: "Position to drop onto AGV"
+  
   teaching_instructions:
-    - "Use xArm Studio or manual teaching mode to record actual positions"
-    - "Replace all [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] with real joint angles"
-    - "Use 'ros2 topic echo /ufactory/joint_states' to get current positions"
-    - "Test each position manually before adding to production"
-    - "Ensure approach positions provide collision-free paths"
-  
-  # Safety Notes
-  safety_notes:
-    - "Always return to home position between operations"
-    - "Use hold position when transitioning between different areas"
-    - "Ensure vacuum is deactivated before moving away from drop positions"
-    - "Test new positions at reduced speed (20-30%) first"
+    - "Use xArm Studio to record TCP pose (not joint angles)"
+    - "Command: arm.get_position() returns [X, Y, Z, Roll, Pitch, Yaw]"
+    - "Test positions at 20-30% speed before production use"
+    - "Verify gripper clearance at each ASRS row"
