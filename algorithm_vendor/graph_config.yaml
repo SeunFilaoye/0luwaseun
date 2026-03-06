@@ -185,6 +185,14 @@ edges:
   # ==================== ROUTE 2: XARM2_C4 → BLUE_BIN ====================
   # XARM2 picks C4R1, drops to AGV, AGV→Node_D, R6→BLUE_BIN
 
+  # Alternative path: XARM2_C4 → Conveyor 2 (used by part_6 → YELLOW_BIN via Route 6 path)
+  - from: "XARM2_C4"
+    to: "XARM2_CONV2_DROP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "lite6"
+    robot: "XARM2"
+
   - from: "XARM2_C4"
     to: "XARM2_AGV_DROP"
     travel_time: 1.0

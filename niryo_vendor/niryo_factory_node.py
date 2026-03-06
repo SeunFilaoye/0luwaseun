@@ -44,8 +44,14 @@ class NiryoFactoryNode(Node):
         self._load_robot_config()
         self._load_conveyor_config()
 
-        # Command queue for sequential processing
+        # General command queue — used for non-pick-place commands (INITIALIZE_*)
         self.command_queue = Queue()
+
+        # Per-robot command queues: pick-place commands are routed here so each
+        # robot serialises its own work while different robots run in parallel.
+        self.robot_command_queues = {
+            f'robot_{rid}': Queue() for rid in self.robot_ids
+        }
 
         # Track robot status
         self.robot_status = {}
@@ -60,10 +66,21 @@ class NiryoFactoryNode(Node):
         # Setup communication
         self._setup_topics()
 
-        # Start command processor thread
+        # Start general command processor thread (handles INITIALIZE_* etc.)
         self.command_processor_thread = threading.Thread(
             target=self._command_processor, daemon=True)
         self.command_processor_thread.start()
+
+        # Start one dedicated processor thread per robot
+        for robot_id in self.robot_ids:
+            robot_key = f'robot_{robot_id}'
+            t = threading.Thread(
+                target=self._per_robot_processor,
+                args=(robot_key,),
+                daemon=True
+            )
+            t.start()
+            self.get_logger().info(f"   🔄 Per-robot queue started for {robot_key}")
 
         self.get_logger().info("=" * 60)
         self.get_logger().info("✅ NIRYO FACTORY NODE READY")
@@ -207,6 +224,11 @@ class NiryoFactoryNode(Node):
 
         Format: "ROBOT_ID | PICKUP - LOCATION | DROP - LOCATION"
 
+        Pick-place commands are routed to the target robot's dedicated queue so
+        that multiple robots can work in parallel while same-robot commands are
+        automatically serialised.  All other commands (INITIALIZE_*) fall through
+        to the general queue.
+
         Args:
             msg: String message containing command
         """
@@ -216,7 +238,18 @@ class NiryoFactoryNode(Node):
         # Send ACK immediately
         self._publish_global_ack(command)
 
-        # Add to queue
+        # Route pick-place commands to per-robot queues
+        command_upper = command.strip().upper()
+        if '|' in command_upper and 'PICKUP' in command_upper and 'DROP' in command_upper:
+            parts = [p.strip() for p in command.split('|')]
+            robot_id_str = parts[0].strip().upper()
+            robot_id = self._parse_robot_id(robot_id_str)
+            if robot_id and robot_id in self.robot_command_queues:
+                self.get_logger().info(f"📋 Queued for {robot_id}: {command}")
+                self.robot_command_queues[robot_id].put(command)
+                return
+
+        # Fallback: general queue (INITIALIZE_ALL, INITIALIZE_R*, unknown formats)
         self.command_queue.put(command)
 
     def _on_ir_trigger(self, conveyor_id: int, msg):
@@ -387,9 +420,48 @@ class NiryoFactoryNode(Node):
         t.start()
         # Return immediately — the command processor can pick up the next command
 
+    def _per_robot_processor(self, robot_id_key: str):
+        """
+        Dedicated processor thread for a single robot.
+
+        Consumes from that robot's command queue and executes tasks one at a time,
+        so commands pile up in the queue rather than being dropped when the robot
+        is busy.  Different robots' threads run fully in parallel.
+        """
+        robot_num = robot_id_key.split('_')[1]
+        robot_id_str = f'R{robot_num}'
+        self.get_logger().info(f"🔄 Per-robot processor ready: {robot_id_key}")
+
+        while True:
+            try:
+                command = self.robot_command_queues[robot_id_key].get(block=True)
+
+                self.get_logger().warn(
+                    f"\n{'='*50}\n🤖 {robot_id_key} PROCESSING: {command}\n{'='*50}"
+                )
+
+                parts = [p.strip() for p in command.split('|')]
+
+                if robot_id_key == 'robot_6':
+                    pickup_str = parts[1].strip() if len(parts) > 1 else ''
+                    drop_str = parts[2].strip() if len(parts) > 2 else ''
+                    self._run_r6_command(robot_id_key, robot_id_str, pickup_str, drop_str)
+                else:
+                    self._run_robot_command(robot_id_key, robot_id_str, command)
+
+                self.robot_command_queues[robot_id_key].task_done()
+
+            except Exception as e:
+                self.get_logger().error(f"❌ Error in {robot_id_key} processor: {e}")
+                import traceback
+                self.get_logger().error(traceback.format_exc())
+
     def _run_robot_command(self, robot_id: str, robot_id_str: str, command: str):
         """Execute a pick/place command on a single robot and publish per-robot completion."""
         try:
+            # Reset any stale DONE status so _wait_for_robot_done doesn't return
+            # immediately from a previous command's completion.
+            self.robot_status[robot_id] = 'EXECUTING'
             self._send_command_to_robot(robot_id, command)
             self._wait_for_robot_done(robot_id)
             self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
@@ -513,23 +585,27 @@ class NiryoFactoryNode(Node):
 
     def _wait_for_robot_done(self, robot_id: str, timeout: float = 120.0):
         """
-        Wait for robot to finish executing command.
+        Wait for robot to return to IDLE after finishing its command.
+
+        Waiting for IDLE (rather than DONE) avoids a race where the next command
+        is sent while the robot is still in the DONE→IDLE transition and would
+        therefore drop it (task_command_callback ignores commands when not IDLE).
+        _run_robot_command resets robot_status to 'EXECUTING' before sending each
+        command, so a stale IDLE from a previous task cannot cause a false early
+        return here.
 
         Args:
             robot_id: Robot identifier
             timeout: Maximum time to wait in seconds
         """
-        self.get_logger().info(f"⏳ Waiting for {robot_id} to complete...")
+        self.get_logger().info(f"⏳ Waiting for {robot_id} to become IDLE...")
 
         start_time = time.time()
 
         while True:
-            # Check if done
-            if self.robot_status.get(robot_id) == 'DONE':
-                self.get_logger().info(f"✅ {robot_id} completed task")
-
-                # Wait for robot to transition to IDLE
-                time.sleep(0.5)
+            # Wait until robot reports back IDLE (ready for next command)
+            if self.robot_status.get(robot_id) == 'IDLE':
+                self.get_logger().info(f"✅ {robot_id} is IDLE and ready")
                 break
 
             # Check timeout

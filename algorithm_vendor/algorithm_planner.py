@@ -33,6 +33,13 @@ class AlgorithmPlanner:
         ('XARM2', 6): ('XARM2_C6', 'YELLOW_BIN'),
     }
 
+    # Per-part routing overrides — takes precedence over COLUMN_ROUTING.
+    # Used when a part stored in a shared column must follow a non-default path.
+    # part_6 lives in C4 (shared with part_4) but routes via Conveyor 2 → YELLOW_BIN.
+    PART_ROUTING_OVERRIDE = {
+        'part_6': ('XARM2_C4', 'YELLOW_BIN'),
+    }
+
     def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize Algorithm Planner.
@@ -88,11 +95,14 @@ class AlgorithmPlanner:
 
             self.logger.info(f"\nPlanning route for Order {order_id} (Part: {part_id}, Xarm: {xarm})")
 
-            # Determine origin and exit nodes from ASRS column
+            # Determine origin and exit nodes.
+            # Part-specific override takes precedence over column-based routing.
             asrs_loc = asrs_data.get(part_id, [''])[0]  # e.g. "C1R1"
             column = int(asrs_loc[1]) if len(asrs_loc) >= 2 and asrs_loc[1].isdigit() else 1
-            origin_node, exit_node = self.COLUMN_ROUTING.get(
-                (xarm, column), ('XARM1_C1', 'RED_BIN'))
+            origin_node, exit_node = self.PART_ROUTING_OVERRIDE.get(
+                part_id,
+                self.COLUMN_ROUTING.get((xarm, column), ('XARM1_C1', 'RED_BIN'))
+            )
             self.logger.info(f"  ASRS loc: {asrs_loc} → column {column} → {origin_node} → {exit_node}")
 
             # Find shortest path

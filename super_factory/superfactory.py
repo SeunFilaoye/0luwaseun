@@ -96,6 +96,11 @@ class SuperFactoryNode(Node):
         # Per-robot completion events for parallel route execution
         self.robot_completion_events = {}  # 'R1' → threading.Event()
 
+        # Per-robot locks: serialize access when multiple parallel route chains
+        # need the same robot (e.g. R1 used in both Route 1 and Route 6 of Batch 3)
+        self._robot_locks_guard = threading.Lock()
+        self.robot_locks = {}  # 'R1' → threading.Lock()
+
         # Per-XARM completion events for parallel XARM execution
         self.xarm_completion_events = {}  # 'XARM1' → threading.Event()
 
@@ -599,16 +604,13 @@ class SuperFactoryNode(Node):
                 if task_type == 'parallel_xarms':
                     success = self._execute_parallel_xarms(task['tasks'])
                 elif task_type == 'parallel_routes_bg':
-                    # Fire niryo chains in a background thread serialized by
-                    # the semaphore — the executor moves on immediately so the
-                    # next batch's XARM picks can start without waiting for niryo.
+                    # Fire niryo chains in a background thread so the executor
+                    # moves on immediately and the next batch's XARM picks can
+                    # start without waiting for niryo.  Per-robot locks inside
+                    # _execute_task serialise same-robot access across batches.
                     routes = task['routes']
                     def _run_niryo_bg(routes=routes):
-                        self.niryo_batch_semaphore.acquire()
-                        try:
-                            self._execute_parallel_routes(routes)
-                        finally:
-                            self.niryo_batch_semaphore.release()
+                        self._execute_parallel_routes(routes)
                     threading.Thread(target=_run_niryo_bg, daemon=True).start()
                     success = True
                 elif task_type == 'parallel_routes':
@@ -762,24 +764,34 @@ class SuperFactoryNode(Node):
                         self.get_logger().error(f"❌ IR readiness timeout for {ready_key}")
                         return False
 
-        # Step 1: Send command to vendor factory
-        self._send_vendor_command(vendor, command)
-
-        # Step 2 & 3: Wait for completion
+        # Step 1 + 2: Send command and wait for completion.
+        # Niryo R-robot commands use a per-robot lock so that two parallel
+        # route chains needing the same robot are serialized: the second
+        # chain waits until the first has finished before sending its command.
+        # The event is cleared and the command sent atomically inside the lock
+        # to prevent a COMMAND_COMPLETE from the first command being observed
+        # by the second chain before it has even issued its command.
         robot_id = task.get('robot_id', '').upper()
         if vendor == 'niryo' and robot_id.startswith('R'):
-            # Per-robot completion event — supports parallel route execution
-            if robot_id not in self.robot_completion_events:
-                self.robot_completion_events[robot_id] = threading.Event()
-            self.robot_completion_events[robot_id].clear()
-            self.get_logger().info(f"⏳ Waiting for {robot_id} to complete...")
-            complete_received = self.robot_completion_events[robot_id].wait(timeout=complete_timeout)
-            if not complete_received:
-                self.get_logger().error(f"❌ Per-robot completion timeout for {robot_id}")
-                return False
-            self.get_logger().info(f"✅ {robot_id} completed")
+            with self._robot_locks_guard:
+                if robot_id not in self.robot_locks:
+                    self.robot_locks[robot_id] = threading.Lock()
+            robot_lock = self.robot_locks[robot_id]
+
+            with robot_lock:
+                if robot_id not in self.robot_completion_events:
+                    self.robot_completion_events[robot_id] = threading.Event()
+                self.robot_completion_events[robot_id].clear()
+                self._send_vendor_command(vendor, command)
+                self.get_logger().info(f"⏳ Waiting for {robot_id} to complete...")
+                complete_received = self.robot_completion_events[robot_id].wait(timeout=complete_timeout)
+                if not complete_received:
+                    self.get_logger().error(f"❌ Per-robot completion timeout for {robot_id}")
+                    return False
+                self.get_logger().info(f"✅ {robot_id} completed")
         else:
             # Generic ACK + completion for lite6 / AGV
+            self._send_vendor_command(vendor, command)
             self.task_ack_received.clear()
             self.task_complete.clear()
             self.get_logger().info(f"⏳ Waiting for ACK from {vendor}...")

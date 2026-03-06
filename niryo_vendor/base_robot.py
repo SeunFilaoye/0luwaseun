@@ -349,18 +349,28 @@ class BaseRobot(Node, ABC):
         try:
             # Send goal and wait for acceptance
             future = self.robot_move_client.send_goal_async(goal)
-            rclpy.spin_until_future_complete(self, future)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
+            if not future.done():
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: Move goal send timeout: {description}"
+                )
+                return False
             handle = future.result()
-            
+
             if not handle.accepted:
                 self.get_logger().error(
                     f"Robot {self.robot_id}: Move rejected: {description}"
                 )
                 return False
-            
+
             # Wait for result
             result_future = handle.get_result_async()
-            rclpy.spin_until_future_complete(self, result_future)
+            rclpy.spin_until_future_complete(self, result_future, timeout_sec=30.0)
+            if not result_future.done():
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: Move result timeout: {description}"
+                )
+                return False
             result = result_future.result().result
             
             if result.status == 1:
@@ -419,7 +429,12 @@ class BaseRobot(Node, ABC):
         
         try:
             future = client.call_async(req)
-            rclpy.spin_until_future_complete(self, future)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+            if not future.done():
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: Vacuum {mode} service timeout (service unresponsive)"
+                )
+                return False
             self.get_logger().info(f"Robot {self.robot_id}: Vacuum {mode} command sent")
             return True
         except Exception as e:
@@ -459,7 +474,12 @@ class BaseRobot(Node, ABC):
 
         try:
             future = client.call_async(req)
-            rclpy.spin_until_future_complete(self, future)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+            if not future.done():
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: Gripper {mode} service timeout (service unresponsive)"
+                )
+                return False
             self.get_logger().info(f"Robot {self.robot_id}: Gripper {mode} command sent")
             return True
         except Exception as e:

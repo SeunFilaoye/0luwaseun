@@ -308,6 +308,13 @@ edge_mappings:
     robot: "R1"
 
   # ==================== ROUTE 2: XARM2_C4 → BLUE_BIN ====================
+  # Alternative: XARM2_C4 → Conveyor 2 (used by part_6 → YELLOW_BIN via Route 6 path)
+  - from: "XARM2_C4"
+    to: "XARM2_CONV2_DROP"
+    command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - CONVEYOR 2"
+    vendor: "lite6"
+    robot: "XARM2"
+
   - from: "XARM2_C4"
     to: "XARM2_AGV_DROP"
     command_template: "XARM2 | PICKUP - ASRS {column} {row} | DROP - AGV A"
