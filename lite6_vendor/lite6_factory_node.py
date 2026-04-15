@@ -19,13 +19,19 @@ Date: 2026-01-11
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy
+
 from std_msgs.msg import String
 import threading
 import time
 from queue import Queue
 import yaml
 import os
+import json
+import sys
+
+# Fault containment registry
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fault_containment'))
+from fault_registry import FaultRegistry
 
 
 class Lite6FactoryNode(Node):
@@ -62,6 +68,10 @@ class Lite6FactoryNode(Node):
             'xarm1': None,
             'xarm2': None
         }
+
+        # Fault containment
+        self.acl = FaultRegistry("lite6")
+        self._fault_violation_pub = None  # set after _setup_topics
 
         # Setup communication
         self._setup_topics()
@@ -121,12 +131,10 @@ class Lite6FactoryNode(Node):
                                 lambda msg: self._on_ack_received('xarm2', msg), 10)
         
         # Status subscribers (robots → factory)
-        # Transient local matches the robot publishers so late joins receive last status
-        status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, '/xarm1/status',
-                                lambda msg: self._on_status_received('xarm1', msg), status_qos)
+                                lambda msg: self._on_status_received('xarm1', msg), 10)
         self.create_subscription(String, '/xarm2/status',
-                                lambda msg: self._on_status_received('xarm2', msg), status_qos)
+                                lambda msg: self._on_status_received('xarm2', msg), 10)
         
         # High-level command subscriber (external → factory)
         self.create_subscription(String, '/lite6_factory/command',
@@ -134,7 +142,11 @@ class Lite6FactoryNode(Node):
         
         # Global status publisher (factory → external)
         self.global_status_pub = self.create_publisher(String, '/lite6_factory/status', 10)
-        
+
+        # Fault containment violation publisher
+        self._fault_violation_pub = self.create_publisher(
+            String, '/fault_containment/violations', 10)
+
         self.get_logger().info("✅ Topics setup complete")
         self.get_logger().info("   Publishing commands to: /xarm1/command, /xarm2/command")
         self.get_logger().info("   Subscribing to ACKs from: /xarm1/ack, /xarm2/ack")
@@ -171,17 +183,53 @@ class Lite6FactoryNode(Node):
         if 'READY' in status.upper():
             self._publish_global_status(f"READY_{robot_id.upper()}")
     
+    def _unwrap_command(self, raw: str):
+        """Unwrap JSON envelope from superfactory. Returns (src, cmd, token)."""
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict) and 'cmd' in data:
+                return (data.get('src', 'UNKNOWN'), data['cmd'], data.get('token', None))
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return ('UNKNOWN', raw, None)
+
     def _on_high_level_command(self, msg):
         """
         Callback when high-level command is received.
 
+        Expects a JSON envelope: {"src": "/super_factory", "cmd": "...", "token": "..."}
+        Plain strings are treated as UNKNOWN source and denied by ACL.
+
         Pick/place commands are routed to the robot's own queue so XARM1 and
         XARM2 execute independently in parallel.  All other commands (INITIALIZE_ALL,
         etc.) go to the general queue.
-
-        Format: "ROBOT_ID | PICKUP - LOCATION | DROP - LOCATION"
         """
-        command = msg.data
+        raw = msg.data
+
+        # --- Fault containment guard ---
+        src, command, token = self._unwrap_command(raw)
+        result = self.acl.check_incoming_command(
+            src, '/lite6_factory/command', token_hex=token
+        )
+        if not result['allowed']:
+            viol = self.acl.build_violation_msg(
+                src_namespace=src,
+                dst_topic='/lite6_factory/command',
+                action='publish',
+                reason=result['reason'],
+                payload_preview=raw,
+            )
+            if self._fault_violation_pub:
+                vmsg = String(); vmsg.data = viol
+                self._fault_violation_pub.publish(vmsg)
+            self.get_logger().warn(
+                f"🚫 [FAULT CONTAINMENT] Command DENIED and DROPPED\n"
+                f"   src={src}  reason={result['reason']}\n"
+                f"   Status: RECEIVED_NOT_ACTED_ON"
+            )
+            return
+        # --- End fault containment ---
+
         self.get_logger().info(f"📥 HIGH-LEVEL COMMAND: {command}")
 
         command_upper = command.upper().strip()

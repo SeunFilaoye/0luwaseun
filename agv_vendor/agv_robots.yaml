@@ -6,7 +6,7 @@ agvs:
   agv_1:
     name: "Alvik1"              # Hardware name (used for ROS2 topics)
     start_position: "A"         # Initial queue position
-    mac_address: "74:4D:BD:9F:C6:E8"
+    mac_address: "3C:84:27:C3:EA:EC"
 
   agv_2:
     name: "Alvik2"
@@ -16,7 +16,7 @@ agvs:
   agv_3:
     name: "Alvik3"
     start_position: "C"
-    mac_address: null           # Unknown MAC
+    mac_address: "null"           # Unknown MAC
 
 # Queue positions (pickup locations)
 # AGVs wait in a queue at positions A, B, C
@@ -56,4 +56,4 @@ communication:
 timing:
   status_timeout_sec: 2.0       # AGV considered offline after this
   command_ack_timeout_sec: 5.0  # Max wait for command acknowledgment
-  delivery_timeout_sec: 120.0   # Max time for delivery cycle
+  delivery_timeout_sec: 150.0   # Max time for delivery cycle

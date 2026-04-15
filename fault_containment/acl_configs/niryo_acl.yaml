@@ -1,0 +1,84 @@
+# =============================================================================
+# Niryo Vendor ACL
+# =============================================================================
+# This file defines what the niryo_factory node (and its robots) may publish
+# to and subscribe from.  The fault_registry.py engine enforces these rules.
+#
+# Namespaces:
+#   own (intra-vendor) :  /niryo_factory/*  /robot_1/* … /robot_6/*
+#   superfactory        :  /super_factory/*
+#   conveyors           :  /niryo_factory/conveyor_*/ir_trigger
+#   fault bus           :  /fault_containment/*
+#
+# Cross-vendor topics (lite6, agv) require a valid HMAC token.
+
+shared_secret: "niryo-secret-key-CHANGEME"
+
+# Sources allowed to send commands to /niryo_factory/command
+# The token must be signed with THIS vendor's shared_secret
+allowed_command_sources:
+  - "/super_factory"
+
+acl:
+
+  # ---------- publish permissions (what this vendor may PUBLISH to) ----------
+  publish:
+    allow:
+      # Own factory status & ack (→ superfactory listens here)
+      - "/niryo_factory/status"
+      - "/niryo_factory/ack"
+      # Per-robot command/ack/status (factory → robot controllers)
+      - "/robot_1/command"
+      - "/robot_2/command"
+      - "/robot_3/command"
+      - "/robot_4/command"
+      - "/robot_5/command"
+      - "/robot_6/command"
+      # Fault containment bus (always allowed)
+      - "/fault_containment/violations"
+      # Experiment 3 NEW topic: vendor reports telemetry to superfactory
+      - "/super_factory/vendor_telemetry"
+
+    deny:
+      # Explicitly block publishing to Lite6 internal topics
+      - "/lite6_factory/*"
+      - "/xarm1/*"
+      - "/xarm2/*"
+      # Explicitly block publishing to AGV internal topics
+      - "/agv_factory/*"
+      - "/agv_*"
+      - "/Alvik*"
+      # Block publishing commands to superfactory's command ingress
+      - "/super_factory/order"
+
+  # ---------- subscribe permissions (what this vendor may SUBSCRIBE to) ----------
+  subscribe:
+    allow:
+      # Own factory command input (from superfactory)
+      - "/niryo_factory/command"
+      # Per-robot status & ack (robot controllers → factory)
+      - "/robot_1/status"
+      - "/robot_1/ack"
+      - "/robot_2/status"
+      - "/robot_2/ack"
+      - "/robot_3/status"
+      - "/robot_3/ack"
+      - "/robot_4/status"
+      - "/robot_4/ack"
+      - "/robot_5/status"
+      - "/robot_5/ack"
+      - "/robot_6/status"
+      - "/robot_6/ack"
+      # Conveyor IR triggers (own conveyors)
+      - "/niryo_factory/conveyor_*/ir_trigger"
+      # Fault violations (monitoring only)
+      - "/fault_containment/violations"
+
+    deny:
+      # Must NOT subscribe to other vendors' internal state
+      - "/lite6_factory/*"
+      - "/xarm1/*"
+      - "/xarm2/*"
+      - "/agv_factory/*"
+      - "/agv_*"
+      - "/Alvik*"

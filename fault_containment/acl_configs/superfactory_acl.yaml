@@ -1,0 +1,45 @@
+# =============================================================================
+# Superfactory ACL  (what the orchestrator may do)
+# =============================================================================
+# The superfactory is the ONLY node allowed to publish commands to vendor
+# factory command topics.  It must have a registered topic entry in each
+# vendor's allowed subscribe list before sending.
+
+shared_secret: "superfactory-secret-key-CHANGEME"
+
+acl:
+
+  publish:
+    allow:
+      # Vendor command inputs (registered channels)
+      - "/niryo_factory/command"
+      - "/lite6_factory/command"
+      - "/agv_factory/command"
+      # Algorithm trigger
+      - "/algorithm/trigger"
+      # Fault containment bus
+      - "/fault_containment/violations"
+
+    deny:
+      # Must not publish to robot-level topics directly (must go via vendor factory)
+      - "/robot_*"
+      - "/xarm*"
+      - "/agv_*"
+      - "/Alvik*"
+
+  subscribe:
+    allow:
+      - "/super_factory/order"
+      - "/niryo_factory/status"
+      - "/niryo_factory/ack"
+      - "/lite6_factory/status"
+      - "/lite6_factory/ack"
+      - "/agv_factory/status"
+      - "/agv_factory/ack"
+      - "/algorithm/trajectory"
+      - "/asrs/response"
+      # Telemetry channel (Experiment 3 — new registered topic)
+      - "/super_factory/vendor_telemetry"
+      - "/fault_containment/violations"
+
+    deny: []

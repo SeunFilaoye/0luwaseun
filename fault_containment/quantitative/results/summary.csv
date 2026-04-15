@@ -1,0 +1,17 @@
+scenario,mode,expected,total_sent,allowed,blocked,block_rate_pct,allow_rate_pct,pass_count,mean_latency_ms,std_latency_ms,min_latency_ms,max_latency_ms
+vendor_to_vendor,sequential,DENY,100,0,100,100.0,0.0,100,0.000816,0.000438,0.000708,0.004664
+vendor_to_vendor,batch,DENY,100,0,100,100.0,0.0,100,0.005968,0.00195,0.003921,0.013292
+outside_no_token,sequential,DENY,100,0,100,100.0,0.0,100,0.000433,0.00024,0.000382,0.002677
+outside_no_token,batch,DENY,100,0,100,100.0,0.0,100,0.003513,0.001065,0.002268,0.006842
+outside_wrong_token,sequential,DENY,100,0,100,100.0,0.0,100,0.014917,0.00971,0.011961,0.098442
+outside_wrong_token,batch,DENY,100,0,100,100.0,0.0,100,0.043064,0.016734,0.028421,0.167978
+outside_valid_token,sequential,ALLOW,100,100,0,0.0,100.0,100,0.012227,0.003772,0.011243,0.039984
+outside_valid_token,batch,ALLOW,100,100,0,0.0,100.0,100,0.019572,0.004428,0.013914,0.037089
+vendor_telemetry,sequential,ALLOW,100,100,0,0.0,100.0,100,0.016613,0.006482,0.015114,0.070813
+vendor_telemetry,batch,ALLOW,100,100,0,0.0,100.0,100,0.022986,0.007776,0.016816,0.069233
+factory_registered,sequential,ALLOW,100,100,0,0.0,100.0,100,0.005283,0.000804,0.005072,0.013063
+factory_registered,batch,ALLOW,100,100,0,0.0,100.0,100,0.011102,0.004004,0.007015,0.017291
+factory_unregistered,sequential,DENY,100,0,100,100.0,0.0,100,0.00766,0.001915,0.007165,0.02187
+factory_unregistered,batch,DENY,100,0,100,100.0,0.0,100,0.0131,0.00455,0.008568,0.026797
+motor_joint,sequential,DENY,100,0,100,100.0,0.0,100,0.011912,0.003057,0.010965,0.034747
+motor_joint,batch,DENY,100,0,100,100.0,0.0,100,0.018176,0.007189,0.01244,0.061536

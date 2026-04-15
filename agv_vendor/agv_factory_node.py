@@ -26,7 +26,12 @@ from queue import Queue
 import yaml
 import os
 import json
+import sys
 from typing import Dict, Optional
+
+# Fault containment registry
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fault_containment'))
+from fault_registry import FaultRegistry
 
 
 class AGVFactoryNode(Node):
@@ -81,6 +86,10 @@ class AGVFactoryNode(Node):
         # These are set when superfactory routes READY from other factories
         self.ready_to_move_event = threading.Event()
         self.ready_to_return_event = threading.Event()
+
+        # Fault containment
+        self.acl = FaultRegistry("agv")
+        self._fault_violation_pub = None  # set after _setup_topics
 
         # Setup communication
         self._setup_topics()
@@ -182,6 +191,10 @@ class AGVFactoryNode(Node):
         # Global ACK publisher (factory -> superfactory)
         self.global_ack_pub = self.create_publisher(String, '/agv_factory/ack', 10)
 
+        # Fault containment violation publisher
+        self._fault_violation_pub = self.create_publisher(
+            String, '/fault_containment/violations', 10)
+
         self.get_logger().info("Topics setup complete")
         self.get_logger().info("   Subscribing to high-level commands: /agv_factory/command")
         self.get_logger().info("   Publishing status to: /agv_factory/status")
@@ -266,20 +279,51 @@ class AGVFactoryNode(Node):
             self.agv_status[agv_id] = msg.data
             self.get_logger().debug(f"[{agv_id}] STATUS: {msg.data}")
 
+    def _unwrap_command(self, raw: str):
+        """Unwrap JSON envelope from superfactory. Returns (src, cmd, token)."""
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict) and 'cmd' in data:
+                return (data.get('src', 'UNKNOWN'), data['cmd'], data.get('token', None))
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return ('UNKNOWN', raw, None)
+
     def _on_high_level_command(self, msg):
         """
         Callback when high-level command is received.
 
+        Expects a JSON envelope: {"src": "/super_factory", "cmd": "...", "token": "..."}
+        Plain strings are treated as UNKNOWN source and denied by ACL.
+
         Format: "ROBOT_ID | PICKUP - LOCATION | DROP - LOCATION"
-
-        Examples:
-        - "AGV1 | PICKUP - STATION_A | DROP - STATION_D"
-        - "AGV2 | PICKUP - A | DROP - E"
-
-        Args:
-            msg: String message containing command
         """
-        command = msg.data
+        raw = msg.data
+
+        # --- Fault containment guard ---
+        src, command, token = self._unwrap_command(raw)
+        result = self.acl.check_incoming_command(
+            src, '/agv_factory/command', token_hex=token
+        )
+        if not result['allowed']:
+            viol = self.acl.build_violation_msg(
+                src_namespace=src,
+                dst_topic='/agv_factory/command',
+                action='publish',
+                reason=result['reason'],
+                payload_preview=raw,
+            )
+            if self._fault_violation_pub:
+                vmsg = String(); vmsg.data = viol
+                self._fault_violation_pub.publish(vmsg)
+            self.get_logger().warn(
+                f"[FAULT CONTAINMENT] Command DENIED and DROPPED\n"
+                f"   src={src}  reason={result['reason']}\n"
+                f"   Status: RECEIVED_NOT_ACTED_ON"
+            )
+            return
+        # --- End fault containment ---
+
         self.get_logger().info(f"HIGH-LEVEL COMMAND: {command}")
 
         # Send ACK immediately

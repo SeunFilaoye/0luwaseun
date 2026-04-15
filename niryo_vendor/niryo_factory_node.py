@@ -26,6 +26,11 @@ from queue import Queue
 import yaml
 import os
 import json
+import sys
+
+# Fault containment registry
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fault_containment'))
+from fault_registry import FaultRegistry
 
 
 class NiryoFactoryNode(Node):
@@ -62,6 +67,10 @@ class NiryoFactoryNode(Node):
         self.robot_acks = {}
         for robot_id in self.robot_ids:
             self.robot_acks[f'robot_{robot_id}'] = None
+
+        # Fault containment
+        self.acl = FaultRegistry("niryo")
+        self._fault_violation_pub = None  # set after _setup_topics
 
         # Setup communication
         self._setup_topics()
@@ -178,6 +187,10 @@ class NiryoFactoryNode(Node):
         # Global ACK publisher (factory → external)
         self.global_ack_pub = self.create_publisher(String, '/niryo_factory/ack', 10)
 
+        # Fault containment violation publisher
+        self._fault_violation_pub = self.create_publisher(
+            String, '/fault_containment/violations', 10)
+
         self.get_logger().info("✅ Topics setup complete")
         robot_topics = ', '.join([f'/robot_{rid}/command' for rid in self.robot_ids])
         self.get_logger().info(f"   Publishing commands to: {robot_topics}")
@@ -222,17 +235,41 @@ class NiryoFactoryNode(Node):
         """
         Callback when high-level command is received.
 
-        Format: "ROBOT_ID | PICKUP - LOCATION | DROP - LOCATION"
+        Format (envelope from superfactory):
+            JSON {"src": "/super_factory", "cmd": "R1 | PICKUP - P11 | DROP - D15", "token": "..."}
+        Legacy plain strings are treated as UNKNOWN source and denied.
 
         Pick-place commands are routed to the target robot's dedicated queue so
         that multiple robots can work in parallel while same-robot commands are
         automatically serialised.  All other commands (INITIALIZE_*) fall through
         to the general queue.
-
-        Args:
-            msg: String message containing command
         """
-        command = msg.data
+        raw = msg.data
+
+        # --- Fault containment: unwrap envelope and validate source ---
+        src, command, token = self._unwrap_command(raw)
+        result = self.acl.check_incoming_command(
+            src, '/niryo_factory/command', token_hex=token
+        )
+        if not result['allowed']:
+            viol = self.acl.build_violation_msg(
+                src_namespace=src,
+                dst_topic='/niryo_factory/command',
+                action='publish',
+                reason=result['reason'],
+                payload_preview=raw,
+            )
+            if self._fault_violation_pub:
+                vmsg = String(); vmsg.data = viol
+                self._fault_violation_pub.publish(vmsg)
+            self.get_logger().warn(
+                f"🚫 [FAULT CONTAINMENT] Command DENIED and DROPPED\n"
+                f"   src={src}  reason={result['reason']}\n"
+                f"   Status: RECEIVED_NOT_ACTED_ON"
+            )
+            return
+        # --- End fault containment ---
+
         self.get_logger().info(f"📥 HIGH-LEVEL COMMAND: {command}")
 
         # Send ACK immediately
@@ -251,6 +288,24 @@ class NiryoFactoryNode(Node):
 
         # Fallback: general queue (INITIALIZE_ALL, INITIALIZE_R*, unknown formats)
         self.command_queue.put(command)
+
+    def _unwrap_command(self, raw: str):
+        """
+        Unwrap a JSON command envelope from the superfactory.
+        Returns (src, cmd, token).  Plain strings → src=UNKNOWN, token=None.
+        """
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict) and 'cmd' in data:
+                return (
+                    data.get('src', 'UNKNOWN'),
+                    data['cmd'],
+                    data.get('token', None),
+                )
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # Plain string — treat as unknown sender
+        return ('UNKNOWN', raw, None)
 
     def _on_ir_trigger(self, conveyor_id: int, msg):
         """

@@ -1,0 +1,49 @@
+# =============================================================================
+# Lite6 (xArm) Vendor ACL
+# =============================================================================
+shared_secret: "lite6-secret-key-CHANGEME"
+
+# Sources allowed to send commands to /lite6_factory/command
+allowed_command_sources:
+  - "/super_factory"
+
+# External systems that may send commands if they hold the shared secret token
+# These are audited separately from trusted internal sources
+allowed_external_sources:
+  - "/external_terminal"
+
+acl:
+
+  publish:
+    allow:
+      - "/lite6_factory/status"
+      - "/lite6_factory/ack"
+      - "/xarm1/command"
+      - "/xarm2/command"
+      - "/fault_containment/violations"
+      # Experiment 3: telemetry channel to superfactory
+      - "/super_factory/vendor_telemetry"
+
+    deny:
+      - "/niryo_factory/*"
+      - "/robot_*"
+      - "/agv_factory/*"
+      - "/agv_*"
+      - "/Alvik*"
+      - "/super_factory/order"
+
+  subscribe:
+    allow:
+      - "/lite6_factory/command"
+      - "/xarm1/status"
+      - "/xarm1/ack"
+      - "/xarm2/status"
+      - "/xarm2/ack"
+      - "/fault_containment/violations"
+
+    deny:
+      - "/niryo_factory/*"
+      - "/robot_*"
+      - "/agv_factory/*"
+      - "/agv_*"
+      - "/Alvik*"

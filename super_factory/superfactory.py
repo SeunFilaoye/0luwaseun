@@ -24,8 +24,14 @@ from std_msgs.msg import String
 import threading
 import time
 import json
+import sys
+import os
 from queue import Queue
 from enum import Enum
+
+# Fault containment registry
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fault_containment'))
+from fault_registry import FaultRegistry
 
 
 class SuperFactoryState(Enum):
@@ -107,6 +113,10 @@ class SuperFactoryNode(Node):
         # Semaphore ensuring niryo batches run one at a time even when
         # XARM picks pipeline ahead (prevents cross-batch robot conflicts)
         self.niryo_batch_semaphore = threading.Semaphore(1)
+
+        # Fault containment
+        self.acl = FaultRegistry("superfactory")
+        self._fault_violation_pub = None  # set after _setup_communication
 
         # Setup communication
         self._setup_communication()
@@ -202,6 +212,11 @@ class SuperFactoryNode(Node):
         self.status_pub = self.create_publisher(
             String, '/super_factory/status', 10)
         self.get_logger().info(f"   Publisher: /super_factory/status")
+
+        # Fault containment violation publisher
+        self._fault_violation_pub = self.create_publisher(
+            String, '/fault_containment/violations', 10)
+        self.get_logger().info(f"   Publisher: /fault_containment/violations")
 
         self.get_logger().info("✅ Communication setup complete")
 
@@ -845,16 +860,53 @@ class SuperFactoryNode(Node):
         """
         Send command to vendor factory.
 
+        Wraps the command in a JSON fault-containment envelope:
+            {"src": "/super_factory", "cmd": "<command>", "token": "<hmac>"}
+        The vendor factory's ACL guard validates the token and src before acting.
+
         Args:
             vendor: Vendor name (e.g., 'lite6', 'niryo')
-            command: Command string
+            command: Plain command string (vendor format)
         """
         if vendor not in self.command_publishers:
             self.get_logger().error(f"❌ Unknown vendor: {vendor}")
             return
 
+        dst_topic = self.vendor_factories[vendor]['command_topic']
+
+        # --- Fault containment: self-check before sending ---
+        result = self.acl.check_permission('/super_factory', dst_topic, action='publish')
+        if not result['allowed']:
+            viol = self.acl.build_violation_msg(
+                src_namespace='/super_factory',
+                dst_topic=dst_topic,
+                action='publish',
+                reason=result['reason'],
+                payload_preview=command,
+            )
+            if self._fault_violation_pub:
+                vmsg = String(); vmsg.data = viol
+                self._fault_violation_pub.publish(vmsg)
+            self.get_logger().error(
+                f"🚫 [FAULT CONTAINMENT] Superfactory self-blocked: {result['reason']}"
+            )
+            return
+        # --- End self-check ---
+
+        # Wrap in fault-containment envelope.
+        # Sign the token with the VENDOR's secret so the vendor can validate it
+        # using its own FaultRegistry.  This is mutual authentication: each vendor
+        # shares a secret only with the superfactory.
+        vendor_acl = FaultRegistry.peer_registry(vendor)
+        token = vendor_acl.generate_token('/super_factory', dst_topic)
+        envelope = json.dumps({
+            'src': '/super_factory',
+            'cmd': command,
+            'token': token,
+        })
+
         msg = String()
-        msg.data = command
+        msg.data = envelope
 
         self.command_publishers[vendor].publish(msg)
         self.get_logger().info(f"📤 Command sent to {vendor}: {command}")

@@ -1,0 +1,41 @@
+# =============================================================================
+# AGV Vendor ACL
+# =============================================================================
+shared_secret: "agv-secret-key-CHANGEME"
+
+# Sources allowed to send commands to /agv_factory/command
+allowed_command_sources:
+  - "/super_factory"
+
+acl:
+
+  publish:
+    allow:
+      - "/agv_factory/status"
+      - "/agv_factory/ack"
+      - "/Alvik1_cmd"
+      - "/Alvik2_cmd"
+      - "/Alvik3_cmd"
+      - "/fault_containment/violations"
+      - "/super_factory/vendor_telemetry"
+
+    deny:
+      - "/niryo_factory/*"
+      - "/robot_*"
+      - "/lite6_factory/*"
+      - "/xarm*"
+      - "/super_factory/order"
+
+  subscribe:
+    allow:
+      - "/agv_factory/command"
+      - "/Alvik1_status"
+      - "/Alvik2_status"
+      - "/Alvik3_status"
+      - "/fault_containment/violations"
+
+    deny:
+      - "/niryo_factory/*"
+      - "/robot_*"
+      - "/lite6_factory/*"
+      - "/xarm*"
