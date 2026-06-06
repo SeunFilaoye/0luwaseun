@@ -1,348 +1,256 @@
-# Niryo Robot Position Configurations
-# This file defines all physical positions and their corresponding joint angles
-# for each Niryo robot in the testbed.
-#
-# Structure:
-#   robot_<id>:
-#     position_key:
-#       joints: [j1, j2, j3, j4, j5, j6]  # Joint angles in radians
-#       description: "Human-readable description"
-#       type: PICKUP | DROP | HOME | HOLD | CAMERA | TRANSIT
-#
-# Note: All joint angles are in radians
-# Note: Position keys (P11, D11, etc.) are physical identifiers used by robot controllers
-
 robot_1:
-  # Feeder Robot (R1) Configuration
   home_joints:
     joints: [0.002, 0.596, -1.008, -0.02, -0.994, -1.15]
-    description: "Home position for Robot 1"
+    description: Home position for Robot 1
     type: HOME
-  
   hold_joints:
-    joints: [-0.0266,0.0615,-0.7824,-0.0075,-0.7041,-0.0321]
-    description: "Hold position after pickup"
+    joints: [-0.0266, 0.0615, -0.7824, -0.0075, -0.7041, -0.0321]
+    description: Hold position after pickup
     type: HOLD
-  
-  # Pickup positions (feeder can pick from multiple locations)
   P11:
-    joints: [-1.5911,-0.6549,-0.3325,0.0476,-0.5308,-0.276]
-    description: "Pickup position - conveyor 1"
+    joints: [-1.5957, -0.5565, -0.5007, 0.0261, -0.6719, -1.1488]
+    description: Pickup position - conveyor 1
     type: PICKUP
-  
   P12:
-    joints: [-0.4238,-0.6337,-0.3946,0.0185,-0.5768,-0.8512]
-    description: "Pickup position - conveyor 2"
+    joints: [-0.4238, -0.6337, -0.3946, 0.0185, -0.5768, -0.8512]
+    description: Pickup position - conveyor 2
     type: PICKUP
-  
   P13:
     joints: [0.617, -0.534, -0.207, 0.008, -0.77, 0.072]
-    description: "Pickup position - conveyor 3"
+    description: Pickup position - conveyor 3
     type: PICKUP
-  
-  # Drop position (onto conveyor)
   D12:
-    joints: [-0.509,-0.6322,-0.2552,0.0645,-0.7425,0.0859]
-    description: "Drop position onto conveyor 2"
+    joints: [-0.509, -0.6322, -0.2552, 0.0645, -0.7425, 0.0859]
+    description: Drop position onto conveyor 2
     type: DROP
   D13:
-    joints: [0.6263,-0.5337,-0.4401,0.1059,-0.6765,-0.256]
-    description: "Drop position onto conveyor 3"
+    joints: [0.5973,-0.5292,-0.3977,0.1749,-0.7563,-1.1488]
+    description: Drop position onto conveyor 3
     type: DROP
   D15:
-    joints: [1.5105,-0.361,-0.7506,0.1151,-0.675,-0.253]
-    description: "Drop position onto conveyor 5"
+    joints: [1.5105, -0.361, -0.7506, 0.1151, -0.675, -0.253]
+    description: Drop position onto conveyor 5
     type: DROP
-
-  # Pre-grip positions (approach positions before pickup)
   pregrip_P11:
-    joints: [-1.5165,-0.2671,-0.5204,-0.0091,-0.8698,-0.0091]
-    description: "Pre-grip position for P11"
+    joints: [-1.5728,-0.1505,-0.5491,-0.0551,-0.8713,-1.1519]
+    description: Pre-grip position for P11
     type: TRANSIT
-  
   pregrip_P12:
-    joints: [-0.4238,-0.2747,-0.2659,0.0108,-1.0585,-0.842]
-    description: "Pre-grip position for P12"
+    joints: [-0.4238, -0.2747, -0.2659, 0.0108, -1.0585, -0.842]
+    description: Pre-grip position for P12
     type: TRANSIT
-  
   pregrip_P13:
     joints: [0.617, -0.534, -0.207, 0.008, -0.77, 0.072]
-    description: "Pre-grip position for P13"
+    description: Pre-grip position for P13
     type: TRANSIT
-
 robot_2:
-  # Processing Robot R2 - Junction/Router Robot
   home_joints:
     joints: [0.002, 0.596, -1.008, -0.02, -0.994, -1.15]
-    description: "Home position for Robot 2"
+    description: Home position for Robot 2
     type: HOME
-  
   hold_joints:
     joints: [1.613, 0.016, -0.534, -0.026, -0.993, -1.152]
-    description: "Hold position after pickup"
+    description: Hold position after pickup
     type: HOLD
-  
-  # Pickup positions (from different conveyors)
   P13:
-    joints: [0.7602,-0.967,0.2567,-0.1011,-0.9618,-1.1519]
-    description: "Pickup from Conveyor C3"
+    joints: [0.7313,-0.9594,0.2476,-0.0842,-0.9312,-1.1565]
+    description: Pickup from Conveyor C3
     type: PICKUP
-  
   P15:
-    joints: [-1.4161,-0.8807,0.081,-0.0796,-0.8821,-1.1519]
-    description: "Pickup from Conveyor C5"
+    joints: [-1.3856,-0.8731,0.0795,-0.0382,-0.8207,-1.1534]
+    description: Pickup from Conveyor C5
     type: PICKUP
-  
-  # Drop positions (to different conveyors)
   D17:
-    joints: [2.9,-0.3035,-0.7855,0.0675,-0.6014,-1.1396]
-    description: "Drop to Conveyor C7"
+    joints: [2.9,-0.2747,-0.834,0.2393,-0.4986,-0.0275]
+    description: Drop to Conveyor C7
     type: DROP
-    
-  # Pre-grip positions (for future classification capability)
   pregrip_P13:
-    joints: [0.7541,-0.6186,0.0113,-0.1072,-1.0017,-1.1503]
-    description: "Pre-grip position position for C3"
+    joints: [0.7541, -0.6186, 0.0113, -0.1072, -1.0017, -1.1503]
+    description: Pre-grip position position for C3
     type: TRANSIT
-  
   pregrip_P15:
-    joints: [-1.4313,-0.558,-0.0901,-0.0397,-0.9941,-1.1519]
-    description: "Pre-grip position position for C5"
+    joints: [-1.4313, -0.558, -0.0901, -0.0397, -0.9941, -1.1519]
+    description: Pre-grip position position for C5
     type: TRANSIT
-  
 robot_3:
-  # Processing Robot R3
   home_joints:
-    joints: [0.002, 0.596, -1.008, -0.020, -0.994, -1.150]
-    description: "Home position for Robot 3"
+    joints: [0.0205, 0.3812, -0.8794, 0.0353, -1.1628, 0.0138]
+    description: Home position for Robot 3
     type: HOME
-  
   hold_joints:
-    joints: [0.070, 0.216, -0.861, 0.027, -0.894, -1.131]
-    description: "Hold position after pickup"
+    joints: [-2.066, -0.3096, -1.9051, 0.0476, -1.0662, -0.1732]
+    description: Hold position after pickup
     type: HOLD
-  
-  # Pickup positions
   P14:
-    joints: [-1.4785,-0.8352,0.0386,-0.0704,-0.856,-1.1335]
-    description: "Pickup from Conveyor C4"
+    joints: [-1.515,-0.8807,0.1143,-0.0183,-0.9373,0.0369]
+    description: Pickup from Conveyor C4
     type: PICKUP
-  
   P13:
-    joints: [-2.6793,-0.7322,-0.1356,-0.0505,-0.787,-1.1381]
-    description: "Pickup from Conveyor C3"
+    joints: [-2.031, 0.6312, -1.1688, 0.0124, -0.9374, -0.1732]
+    description: Pickup from Conveyor C3
     type: PICKUP
-  
-  # Drop positions
   D13:
-    joints: [-1.473, -0.954, 0.274, 0.029, -0.894, -1.130]
-    description: "Drop to Conveyor C3"
+    joints: [-2.0645, 0.2525, -1.3173, 0.0415, -0.9374, -0.1702]
+    description: Drop to Conveyor C3
     type: DROP
-  
   D18:
-    joints: [1.5729,-0.7337,-0.028,-0.0167,-0.9941,-1.1396]
-    description: "Drop to Conveyor C8"
+    joints: [1.5714,-0.7155,-0.0962,0.0721,-0.902,0.0277]
+    description: Drop to Conveyor C8
     type: DROP
-
-  # Pre-grip positions
   pregrip_P13:
-    joints: [-1.508, -0.442, -0.129, 0.104, -1.277, -1.066]
-    description: "Pre-grip position position for C3"
+    joints: [-2.0447, 0.407, -1.2673, 0.0507, -0.9374, -0.1732]
+    description: Pre-grip position for C3
     type: TRANSIT
-  
   pregrip_P14:
-    joints: [-1.483, -0.5125, -0.0007, -0.0137, -1.1076, -1.1396]
-    description: "Pre-grip position position for C5"
+    joints: [-1.512,-0.5731,-0.0871,0.0231,-0.8683,0.5139]
+    description: Pre-grip position for C4
     type: TRANSIT
-  
   pregrip_P18:
-    joints: [1.565, -0.497, -0.128, 0.024, -1.276, -1.062]
-    description: "Pre-grip position position for C8"
+    joints: [1.5485,-0.6428,-0.2356,0.1718,-0.7655,0.5155]
+    description: Pre-grip position for C8
     type: TRANSIT
-
 robot_4:
-  # Processing Robot R4
   home_joints:
     joints: [-0.069, 0.218, -0.867, -0.005, -1.201, -1.247]
-    description: "Home position for Robot 4"
+    description: Home position for Robot 4
     type: HOME
-  
   hold_joints:
-    joints: [-0.7525,-0.1232,-0.5885,0.0737,-0.9158,-0.9954]
-    description: "Hold position after pickup"
+    joints: [-0.7525, -0.1232, -0.5885, 0.0737, -0.9158, -0.9954]
+    description: Hold position after pickup
     type: HOLD
-  
-  # Pickup positions
   P15:
-    joints: [-1.0812,-1.1715,0.6839,0.0016,-1.0401,-0.4831]
-    description: "Pickup from Conveyor C5"
+    joints: [-1.0478,-1.27,0.8793,-0.0382,-1.2395,-1.2577]
+    description: Pickup from Conveyor C5
     type: PICKUP
-  
   P16:
-    joints: [1.1194,-0.9806,0.3264,0.0154,-0.7716,-0.9448]
-    description: "Pickup from Conveyor C6"
+    joints: [1.0965,-1.0564,0.4764,-0.0075,-1.0662,-1.2485]
+    description: Pickup from Conveyor C6
     type: PICKUP
-  
-  P13:
-    joints: [1.574, -0.797, -0.139, 0.023, -0.815, -0.005]
-    description: "Pickup from vertical buffer (VB)"
+  P12:
+    joints: [-1.7889, -0.9625, 0.1204, -0.029, -0.7195, -1.2792]
+    description: Pickup from AGV Factory Two node D
     type: PICKUP
-  
-  # Drop positions
   D16:
-    joints: [-0.369,-0.2307,-0.9188,0.0062,-0.4694,-1.0092]
-    description: "Drop to Conveyor C6"
+    joints: [-0.3796,-0.2671,-0.9112,-0.0581,-0.4817,-1.2439]
+    description: Drop to Conveyor C6
     type: DROP
-  
   D12:
-    joints: [1.4314,-0.7519,0.0658,0.744,-0.4679,-1.0092]
-    description: "Drop to Red Bin"
+    joints: [1.4314, -0.7519, 0.0658, 0.744, -0.4679, -1.0092]
+    description: Drop to Red Bin
     type: DROP
-  
   D13:
-    joints: [1.856,0.0373,-0.74,0.3575,-0.7686,-1.0154]
-    description: "Drop to vertical buffer (VB)"
+    joints: [1.856, 0.0373, -0.74, 0.3575, -0.7686, -1.0154]
+    description: Drop to vertical buffer (VB)
     type: DROP
-  
-  # Pre-grip positions
   pregrip_P15:
-    joints: [-1.0569,-0.9746,0.7127,0.0046,-1.2226,-1.0292]
-    description: "Pregrip position for C5"
+    joints: [-1.0569, -0.9746, 0.7127, 0.0046, -1.2226, -1.0292]
+    description: Pregrip position for C5
     type: TRANSIT
-  
   pregrip_P16:
-    joints: [1.1711,-0.8291,0.337,-0.0336,-1.1291,-0.2376]
-    description: "Pregrip position for C6"
+    joints: [1.1057,-0.9625,0.5642,0.0046,-1.2165,-1.1887]
+    description: Pregrip position for C6
     type: TRANSIT
-  
-  pregrip_P13:
-    joints: [1.582, -0.478, -0.472, -0.005, -0.815, -0.005]
-    description: "Pre-grip position position for VB"
+  pregrip_P12:
+    joints: [-1.7844, -0.8716, 0.1204, -0.0244, -0.8483, -1.2807]
+    description: Pickup from AGV Factory Two node D
     type: TRANSIT
-
 robot_5:
-  # Processing Robot R5 - Terminal Robot with Multi-bin Sorting
   home_joints:
-    joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.770]
-    description: "Home position for Robot 5"
+    joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.77]
+    description: Home position for Robot 5
     type: HOME
-  
   hold_joints:
     joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.729]
-    description: "Hold position after pickup"
+    description: Hold position after pickup
     type: HOLD
-  
-  # Pickup positions
   P16:
-    joints: [2.9,-0.5125,-0.5385,0.0568,-0.5876,-1.7409]
-    description: "Pickup from Conveyor C6"
+    joints: [2.9, -0.5125, -0.5385, 0.0568, -0.5876, -1.7409]
+    description: Pickup from Conveyor C6
     type: PICKUP
-  
   P17:
-    joints: [0.2245,-0.3171,-0.8779,-0.0029,-0.4296,-1.6734]
-    description: "Pickup from Conveyor C7"
+    joints: [0.3097,-0.3368,-0.8476,0.0261,-0.4572,-1.7578]
+    description: Pickup from Conveyor C7
     type: PICKUP
-  
   P13:
-    joints: [0.9124,-0.9306,0.087,0.0123,-0.741,-0.0796]
-    description: "Pick from AGV E"
+    joints: [0.9352, -0.9458, 0.1234, 0.02, -0.7885, -1.6964]
+    description: Pick from AGV E
     type: PICKUP
-
-  # Drop positions (sorting bins)
+  #D11:
+  #  joints: [2.9, -0.864, 0.284, -0.052, -0.9757, -0.0796]
+  #  description: Drop to Red bin
+  #  type: DROP
   D11:
-    joints: [2.9,-0.864,0.284,-0.052,-0.9757,-0.0796]
-    description: "Drop to Red bin"
+    joints: [1.8453,-0.1747,-0.8976,1.1919,-0.8238,-1.7425]
+    description: Drop to Red bin                                    #actually the blue bin but this is for safety
     type: DROP
-  
   D12:
-    joints: [0.3006,-0.5004,-0.1825,-0.1533,-0.7087,-0.0796]
-    description: "Drop to Blue bin"
+    joints: [1.8453,-0.1747,-0.8976,1.1919,-0.8238,-1.7425]
+    description: Drop to Blue bin
     type: DROP
-  
+  #D13:
+  #  joints: [2.2608, -0.1217, -0.8158, -0.0766, -0.7087, -0.0781]
+  #  description: Drop to Yellow bin
+  #  type: DROP
   D13:
-    joints: [2.2608,-0.1217,-0.8158,-0.0766,-0.7087,-0.0781]
-    description: "Drop to Yellow bin"
+    joints: [1.8453,-0.1747,-0.8976,1.1919,-0.8238,-1.7425]
+    description: Drop to Yellow bin                                 # actually the blue bin but this is for safety
     type: DROP
-  
-  # Pre-grip positions
   pregrip_P16:
-    joints: [2.9,-0.208,-0.5219,0.0829,-0.8437,-1.7409]
-    description: "Pre-grip position position for C6"
+    joints: [2.9, -0.208, -0.5219, 0.0829, -0.8437, -1.7409]
+    description: Pre-grip position position for C6
     type: TRANSIT
-  
   pregrip_P17:
-    joints: [0.1453,-0.008,-0.7476,0.0031,-0.8284,-1.7425]
-    description: "Pre-grip position position for C7"
+    joints: [0.3827,-0.0005,-0.7749,0.0277,-0.8361,-1.7225]
+    description: Pre-grip position position for C7
     type: TRANSIT
-  
   pregrip_P13:
-    joints: [0.9169,-0.4807,-0.1856,0.0016,-0.9818,-0.0796]
-    description: "Pre-grip approach position for AGV_E"
+    joints: [0.9169, -0.4807, -0.1856, 0.0016, -0.9818, -0.0796]
+    description: Pre-grip approach position for AGV_E
     type: TRANSIT
-
 robot_6:
-  # Processing Robot R5 - Terminal Robot with Multi-bin Sorting
   home_joints:
-    joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.770]
-    description: "Home position for Robot 5"
+    joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.77]
+    description: Home position for Robot 5
     type: HOME
-  
   hold_joints:
-    joints: [1.540, 0.120, -0.634, 0.013, -1.156, -1.765]
-    description: "Hold position after pickup"
+    joints: [1.54, 0.12, -0.634, 0.013, -1.156, -1.765]
+    description: Hold position after pickup
     type: HOLD
-  
-  # Pickup positions
   P18:
-    joints: [0.5654,-0.4125,-0.8082,0.02,-0.5032,-1.1243]
-    description: "Pickup from Conveyor C8"
+    joints: [0.4771,-0.3686,-0.8703,-0.0735,-0.2838,-1.7532]
+    description: Pickup from Conveyor C8
     type: PICKUP
-  
   P12:
-    joints: [1.5059,-0.9458,0.0234,0.0476,-0.7747,-1.158]
-    description: "Pickup from AGV node D"
+    joints: [1.5135,-0.914,0.0067,-0.0827,-0.6827,-1.7271]
+    description: Pickup from AGV node D
     type: PICKUP
-  
-  # Drop positions (sorting bins)
   D11:
     joints: [2.343, -0.5383, -0.4704, 0.0399, -0.6244, -1.7578]
-    description: "Drop to Blue bin"
+    description: Drop to Blue bin
     type: DROP
-    
-  # Pre-grip positions
   pregrip_P18:
-    joints: [0.608, 0.375, -0.929, 0.029, -1.158, -1.767]
-    description: "Pre-grip position position for C8"
+    joints: [0.5699,-0.1111,-0.7143,-0.0152,-0.7824,-1.7501]
+    description: Pre-grip position position for C8
     type: TRANSIT
-  
   pregrip_P12:
     joints: [1.562, -0.379, -0.255, 0.046, -1.181, -1.759]
-    description: "Pre-grip position position for AGV at node D"
+    description: Pre-grip position position for AGV at node D
     type: TRANSIT
-  
   pregrip_drop:
     joints: [2.279, -0.053, -0.571, 0.127, -1.181, -1.757]
-    description: "Pre-grip position of drop location"
+    description: Pre-grip position of drop location
     type: TRANSIT
-
-# Configuration metadata
 metadata:
-  version: "1.0"
-  date: "2024-12-22"
-  coordinate_system: "DH_CONVENTION"
-  joint_units: "radians"
-  description: "Physical position configurations for Niryo NED2 robots in vendor-agnostic testbed"
-  
-  # Position type definitions
-  position_types:
-    HOME: "Default starting position for robot"
-    HOLD: "Safe holding position with object secured"
-    PICKUP: "Position to pick object from surface/conveyor"
-    DROP: "Position to drop object onto surface/conveyor"
-    CAMERA: "Position for camera observation (future use)"
-    TRANSIT: "Intermediate position for safe motion"
-  
-  # Joint limits (for validation)
+  version: '1.0'
+  date: '2024-12-22'
+  coordinate_system: DH_CONVENTION
+  joint_units: radians
+  description: Physical position configurations for Niryo NED2 robots in vendor-agnostic
+    testbed
+  position_types: {HOME: Default starting position for robot, HOLD: Safe holding position
+      with object secured, PICKUP: Position to pick object from surface/conveyor,
+    DROP: Position to drop object onto surface/conveyor, CAMERA: Position for camera
+      observation (future use), TRANSIT: Intermediate position for safe motion}
   joint_limits:
     min: [-3.14159, -3.14159, -3.14159, -3.14159, -3.14159, -3.14159]
     max: [3.14159, 3.14159, 3.14159, 3.14159, 3.14159, 3.14159]

@@ -16,7 +16,7 @@ agvs:
   agv_3:
     name: "Alvik3"
     start_position: "C"
-    mac_address: "null"           # Unknown MAC
+    mac_address: "74:4D:BD:A2:1D:C0"           # Unknown MAC
 
 # Queue positions (pickup locations)
 # AGVs wait in a queue at positions A, B, C

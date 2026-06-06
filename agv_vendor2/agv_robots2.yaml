@@ -1,0 +1,44 @@
+# AGV Robot Configuration — Fleet 2
+# Alvik 4 and Alvik 5 (second AGV vendor domain)
+
+agvs:
+  agv_4:
+    name: "Alvik4"
+    start_position: "A"
+    mac_address: "80:65:99:C5:E5:70"
+
+  agv_5:
+    name: "Alvik5"
+    start_position: "B"
+    mac_address: "74:4D:BD:A2:1D:D0"
+
+# Queue positions (pickup locations)
+queue_positions:
+  - "A"   # Service position (front of queue)
+  - "B"   # Second in queue
+
+# Destination positions (drop locations)
+destinations:
+  - "D"
+  - "E"
+
+# Station mappings
+stations:
+  STATION_A: "A"
+  STATION_B: "B"
+  STATION_D: "D"
+  STATION_E: "E"
+  AGV_PICKUP: "A"
+  AGV_DROP_D: "D"
+  AGV_DROP_E: "E"
+
+# Communication settings
+communication:
+  command_suffix: "_cmd"
+  status_suffix: "_status"
+
+# Timing settings
+timing:
+  status_timeout_sec: 2.0
+  command_ack_timeout_sec: 5.0
+  delivery_timeout_sec: 150.0

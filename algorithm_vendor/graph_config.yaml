@@ -79,12 +79,25 @@ nodes:
     robot: "XARM2"
     description: "XARM2 drop-off point for Conveyor 2 (route 6)"
 
-  # ==================== AGV INTERMEDIATE NODE ====================
+  # ==================== AGV INTERMEDIATE NODES ====================
 
   - id: "AGV_NODE_D"
     type: "pickup"
     vendor: "agv"
     description: "AGV node D — R6 picks from here (route 2)"
+
+  # ==================== AGV VENDOR 2 NODES ====================
+
+  - id: "XARM1_AGV2_DROP"
+    type: "dropoff"
+    vendor: "lite6"
+    robot: "XARM1"
+    description: "XARM1 drop-off point for AGV Vendor 2 node A (route 7)"
+
+  - id: "AGV2_NODE_D"
+    type: "pickup"
+    vendor: "agv2"
+    description: "AGV Vendor 2 node D — R4 picks from here (route 7)"
 
   # ==================== CONVEYOR PICKUP NODES ====================
 
@@ -333,3 +346,27 @@ edges:
     bidirectional: false
     vendor: "conveyor"
     robot: null
+
+  # ==================== ROUTE 7: XARM1_C1 → AGV2 → RED_BIN ====================
+  # XARM1 picks C1, drops to AGV Vendor 2 node A, Alvik4 → node D, R4 → RED_BIN
+
+  - from: "XARM1_C1"
+    to: "XARM1_AGV2_DROP"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "lite6"
+    robot: "XARM1"
+
+  - from: "XARM1_AGV2_DROP"
+    to: "AGV2_NODE_D"
+    travel_time: 2.0
+    bidirectional: false
+    vendor: "agv2"
+    robot: null
+
+  - from: "AGV2_NODE_D"
+    to: "RED_BIN"
+    travel_time: 1.0
+    bidirectional: false
+    vendor: "niryo"
+    robot: "R4"

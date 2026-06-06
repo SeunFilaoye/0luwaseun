@@ -87,33 +87,48 @@ class BaseLite6:
                 positions_config = yaml.safe_load(f)
             
             robot_positions = positions_config.get(self.robot_id, {})
-            tcp_positions = robot_positions.get('positions', {})
             asrs_grid = robot_positions.get('asrs_grid', {})
-            raw_joint_positions = robot_positions.get('joint_positions', {})
 
-            # Convert joint positions (degrees → radians)
-            joint_positions = {}
-            for name, data in raw_joint_positions.items():
-                if isinstance(data, dict) and 'joints' in data:
-                    joints_deg = data['joints']
-                    joints_rad = self._degrees_to_radians(joints_deg)
-                    joint_positions[name] = {
-                        'joints': joints_rad,
-                        'joints_deg': joints_deg,
-                        'tcp': data.get('tcp'),
-                        'description': data.get('description', name),
-                        'type': data.get('type', 'UNKNOWN')
-                    }
+            # Support both the old split format (joint_positions: + positions:) and
+            # the merged format (positions: only). Merge both sections so that either
+            # robot config works; positions: takes precedence on name collision.
+            raw_joint_positions = robot_positions.get('joint_positions', {})
+            raw_positions = robot_positions.get('positions', {})
+            merged_raw = {}
+            merged_raw.update(raw_joint_positions)
+            merged_raw.update(raw_positions)
+
+            # Process every entry: normalise tcp/pose as aliases, convert joints deg→rad.
+            # After processing:
+            #   entry['joints']     = radians  (used by ROS trajectory path)
+            #   entry['joints_deg'] = degrees  (used by xArmAPI path via get_joint_position_deg)
+            #   entry['tcp']        = TCP pose  (same list as 'pose')
+            #   entry['pose']       = TCP pose  (same list as 'tcp')
+            processed = {}
+            for name, data in merged_raw.items():
+                if not isinstance(data, dict):
+                    continue
+                entry = dict(data)
+                # Normalise tcp ↔ pose aliases
+                if 'tcp' in entry and 'pose' not in entry:
+                    entry['pose'] = entry['tcp']
+                elif 'pose' in entry and 'tcp' not in entry:
+                    entry['tcp'] = entry['pose']
+                # Convert joints degrees → radians; keep degrees copy for xArmAPI
+                if 'joints' in entry:
+                    joints_deg = entry['joints']
+                    entry['joints_deg'] = joints_deg
+                    entry['joints'] = self._degrees_to_radians(joints_deg)
+                processed[name] = entry
 
             self.node.get_logger().info(
-                f"✅ Loaded {len(joint_positions)} joint positions (deg→rad)")
+                f"✅ Loaded {len(processed)} positions (deg→rad where applicable)")
 
             return {
                 'robot': robots_config.get(self.robot_id, {}),
-                # Backwards-compatible: treat joint positions as primary positions.
-                'positions': joint_positions,
-                'joint_positions': joint_positions,
-                'tcp_positions': tcp_positions,
+                'positions': processed,
+                'joint_positions': processed,
+                'tcp_positions': processed,
                 'asrs_grid': asrs_grid,
                 'metadata': robots_config.get('metadata', {})
             }

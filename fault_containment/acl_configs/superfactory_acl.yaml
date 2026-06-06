@@ -15,6 +15,7 @@ acl:
       - "/niryo_factory/command"
       - "/lite6_factory/command"
       - "/agv_factory/command"
+      - "/agv_factory2/command"
       # Algorithm trigger
       - "/algorithm/trigger"
       # Fault containment bus
@@ -24,7 +25,6 @@ acl:
       # Must not publish to robot-level topics directly (must go via vendor factory)
       - "/robot_*"
       - "/xarm*"
-      - "/agv_*"
       - "/Alvik*"
 
   subscribe:
@@ -36,6 +36,8 @@ acl:
       - "/lite6_factory/ack"
       - "/agv_factory/status"
       - "/agv_factory/ack"
+      - "/agv_factory2/status"
+      - "/agv_factory2/ack"
       - "/algorithm/trajectory"
       - "/asrs/response"
       # Telemetry channel (Experiment 3 — new registered topic)

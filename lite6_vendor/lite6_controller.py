@@ -320,7 +320,45 @@ class Lite6RobotNode(Node):
         success = self._pick_from_position(pickup_position)
         if not success:
             return False
-        
+
+        # Safety retreat: after picking from certain ASRS columns the arm must
+        # pass through the column approach waypoint before swinging to the drop.
+        #   C2/C3 (xarm1): only when dropping cross-ASRS (Conveyor 1 or AGV2).
+        #   C5 (xarm2): always — must move in +x toward C5_approach to clear the ASRS.
+        asrs_col_match = re.match(r'^asrs_c(\d+)_r\d+$', pickup_position)
+        if asrs_col_match:
+            col_num = int(asrs_col_match.group(1))
+            drop_lower = drop_position.lower()
+            needs_retreat = (
+                (col_num in (2, 3) and
+                 (drop_lower == 'conveyor1_drop' or drop_lower.startswith('agv2_')))
+                or col_num == 5
+            )
+            if needs_retreat:
+                approach_key = f'C{col_num}_approach'
+                approach_info = self.base.get_tcp_position(approach_key)
+                if approach_info:
+                    self.get_logger().info(
+                        f"🏠 [{self.robot_id}] C{col_num} safety retreat: "
+                        f"{approach_key} → HOME"
+                    )
+                    approach_joints = approach_info.get('joints_deg')
+                    if approach_joints and self.base._ensure_xarmapi_initialized():
+                        if not self.base.move_joints_xarmapi(
+                                approach_joints, speed=self.joint_speed,
+                                acceleration=self.joint_acceleration,
+                                description=f"ASRS C{col_num} safety retreat"):
+                            return False
+                    else:
+                        approach_pose = approach_info.get('pose')
+                        if approach_pose and not self._move_tcp(
+                                approach_pose, speed=self.tcp_speed,
+                                acceleration=self.tcp_acceleration,
+                                description=f"ASRS C{col_num} safety retreat"):
+                            return False
+                    if not self._move_home_safe():
+                        return False
+
         # Execute place operation
         success = self._place_to_position(drop_position)
         
@@ -390,6 +428,13 @@ class Lite6RobotNode(Node):
                 return None
             position = parts[1].lower()  # "A11" → "a11"
             return f"agv_{position}"
+
+        elif location_type == 'AGV2':
+            # Format: "AGV2 A" → "agv2_a"  (vendor 2 fleet, uses AGV2_* joint positions)
+            if len(parts) < 2:
+                return None
+            position = parts[1].lower()
+            return f"agv2_{position}"
         
         elif location_type == 'CONVEYOR':
             # Simple format: "CONVEYOR 3" → "conveyor3_drop" (for drop operations)
@@ -468,7 +513,7 @@ class Lite6RobotNode(Node):
 
             # 1b. Column 6 only: pass through C6_pre_approach before C6_approach.
             if pre_approach_info is not None:
-                pre_joints_deg = pre_approach_info.get('joints')
+                pre_joints_deg = pre_approach_info.get('joints_deg')
                 pre_pose = pre_approach_info.get('pose')
                 if pre_joints_deg and self.base._ensure_xarmapi_initialized():
                     if not self.base.move_joints_xarmapi(
@@ -485,7 +530,7 @@ class Lite6RobotNode(Node):
             # 2. Move to column approach waypoint.
             # Use joint move if joint angles exist in position data (avoids C24 on extended poses),
             # otherwise fall back to TCP.
-            approach_joints_deg = approach_info.get('joints')
+            approach_joints_deg = approach_info.get('joints_deg')
             if approach_joints_deg and self.base._ensure_xarmapi_initialized():
                 if not self.base.move_joints_xarmapi(
                         approach_joints_deg, speed=self.joint_speed,
@@ -540,7 +585,7 @@ class Lite6RobotNode(Node):
                                           description="ASRS C6 retreat to approach"):
                         return False
                 # Retreat to C6_pre_approach
-                pre_joints_deg = pre_approach_info.get('joints')
+                pre_joints_deg = pre_approach_info.get('joints_deg')
                 pre_pose = pre_approach_info.get('pose')
                 if pre_joints_deg and self.base._ensure_xarmapi_initialized():
                     if not self.base.move_joints_xarmapi(
@@ -608,6 +653,43 @@ class Lite6RobotNode(Node):
         self._publish_status("IN_TRANSIT")
 
         # AGV drop uses joint positions for safe approach/drop/escape
+        if position_name.lower().startswith('agv2_'):
+            # Full joint-space sequence for AGV2 drop. All three waypoints have
+            # recorded joint angles so IK is never invoked — eliminates C22 self-
+            # collision from IK joint-flips on the previous TCP-based approach.
+            # Sequence: approach → escape (hover, same XY as drop but Z=218mm)
+            #           → drop (descend to Z=117mm) → escape → HOME
+            if not self._move_joint_named('AGV2_approach', speed=self.joint_speed):
+                return False
+
+            # Step 1: joint move to hover position above the drop point
+            if not self._move_joint_named('AGV2_escape', speed=self.joint_speed):
+                return False
+
+            # Step 2: joint move down to drop at half speed (deterministic, no IK)
+            if not self._move_joint_named('AGV2_drop', speed=self.joint_speed / 2):
+                return False
+
+            self._publish_status("PLACING")
+            if not self.base.vacuum_off():
+                return False
+
+            # Step 3: joint move back to hover before returning home
+            if not self._move_joint_named('AGV2_escape', speed=self.joint_speed):
+                return False
+
+            # Step 4: intermediate retreat waypoint to break the large joint swing to HOME
+            if not self._move_joint_named('AGV2_retreat', speed=self.joint_speed):
+                return False
+
+            self._publish_status("READY")
+
+            if not self._move_home_safe():
+                return False
+
+            self.get_logger().info(f"✅ [{self.robot_id}] PLACE completed to {position_name}")
+            return True
+
         if position_name.lower().startswith('agv_'):
             # Joint move to AGV approach
             if not self._move_joint_named('AGV_approach', speed=self.joint_speed):

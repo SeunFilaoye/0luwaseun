@@ -78,6 +78,11 @@ class AGVFactoryNode(Node):
         for agv_id in self.agv_ids:
             self._last_arrival_position[f'agv_{agv_id}'] = None
 
+        # Claimed queue positions: position → agv_key that has been told to advance there.
+        # Prevents two AGVs being sent to the same slot during the ADVANCING state window
+        # (when the AGV has left its old position but not yet reported IDLE at the new one).
+        self._claimed_positions: Dict[str, str] = {}
+
         # Current service tracking
         self.current_service_agv: Optional[str] = None
         self.current_destination: Optional[str] = None
@@ -241,10 +246,28 @@ class AGVFactoryNode(Node):
             if self._last_logged_state.get(agv_id) != state:
                 self.get_logger().info(f"[{agv_id}] {state} @ {position}")
 
-                # When the service AGV departs position A, advance the rest of the queue
-                if (state == 'MOVING'
-                        and self._last_logged_state.get(agv_id) == 'WAITING_LOAD'
-                        and agv_id == self.current_service_agv):
+                # When an AGV arrives at a queue position, release its destination claim
+                # so other AGVs can safely be assigned to positions it vacated.
+                if state == 'IDLE' and position in self.queue_positions:
+                    for pos, claimant in list(self._claimed_positions.items()):
+                        if claimant == agv_id:
+                            del self._claimed_positions[pos]
+                            self.get_logger().info(
+                                f"Released claim on {pos} (agv {agv_id} arrived at {position})"
+                            )
+
+                    # Cascade: AGV arrived IDLE from ADVANCING (cascade hop) or RETURNING
+                    # (service AGV came back from a delivery destination). In both cases the
+                    # slot it vacated is physically clear and any free slot ahead should be
+                    # filled without waiting for the next pick-place command.
+                    prev = self._last_logged_state.get(agv_id)
+                    if prev in ('ADVANCING', 'RETURNING'):
+                        self._trigger_cascade_advance(position)
+
+                # When the service AGV departs on its delivery trip, advance the queue.
+                # Trigger on any → MOVING transition; WAITING_LOAD is the normal
+                # path but a fast READY can cause IDLE→MOVING directly.
+                if state == 'MOVING' and agv_id == self.current_service_agv:
                     threading.Thread(
                         target=self._advance_queue_after_departure, daemon=True
                     ).start()
@@ -269,15 +292,16 @@ class AGVFactoryNode(Node):
                 if position not in self.destinations:
                     self._last_arrival_position[agv_id] = None
 
-                # Handle state transitions for current service AGV
-                if self.current_service_agv == agv_id:
-                    # AGV arrived at destination and waiting for unload
-                    if state == 'WAITING_UNLOAD':
-                        self.get_logger().info(f"[{agv_id}] At destination, waiting for Ned2 to pick part...")
-                        self._publish_global_status("AGV_WAITING_FOR_UNLOAD")
+                # Handle state transitions for current service AGV — only on actual changes.
+                # Gating on _last_logged_state prevents stale heartbeats (e.g. repeated IDLE
+                # while the AGV is sitting at A waiting to be loaded) from falsely triggering
+                # "Service complete" and clearing current_service_agv before the delivery starts.
+                if (self.current_service_agv == agv_id
+                        and self._last_logged_state.get(agv_id) != state):
 
-                    # Check if a command completed (AGV returned to queue)
-                    elif state == 'IDLE':
+                    # AGV returned to queue after completing delivery (RETURNING → IDLE only)
+                    if (state == 'IDLE'
+                            and self._last_logged_state.get(agv_id) == 'RETURNING'):
                         self.get_logger().info(f"[{agv_id}] Service complete, returned to queue")
                         self._publish_global_status("COMMAND_COMPLETE")
                         self.current_service_agv = None
@@ -491,29 +515,166 @@ class AGVFactoryNode(Node):
             status = self.agv_detailed_status.get(agv_key, {})
             if (status.get('position') == position
                     and status.get('state') == 'IDLE'
-                    and (time.time() - status.get('last_update', 0)) < 5.0):
+                    and (time.time() - status.get('last_update', 0)) < 30.0):
                 return agv_key
         return None
 
     def _advance_queue_after_departure(self):
         """
         Called in a background thread when the service AGV departs from A.
-        Advances robots waiting at B→A and C→B so the queue stays filled.
+        Only advances B→A. C→B is triggered by cascade once B is physically vacated
+        (i.e., when the B→A AGV confirms IDLE at A via _trigger_cascade_advance).
         """
         # Brief pause so the departing AGV clears position A's sticker zone
         time.sleep(2.0)
 
-        # B → A
-        agv_at_b = self._find_agv_at_position('B')
-        if agv_at_b:
-            self.get_logger().info(f"Queue advance: {agv_at_b} B → A")
-            self._send_command_to_agv(agv_at_b, 'advance_to a')
+        def _slot_occupied(pos: str) -> bool:
+            return bool(self._claimed_positions.get(pos)) or (
+                self._find_agv_at_position(pos) is not None
+            )
 
-        # C → B  (send immediately; the Arduino won't start until it's commanded to)
-        agv_at_c = self._find_agv_at_position('C')
-        if agv_at_c:
-            self.get_logger().info(f"Queue advance: {agv_at_c} C → B")
-            self._send_command_to_agv(agv_at_c, 'advance_to b')
+        # B → A only — never send C→B here, because B isn't physically free yet.
+        if not _slot_occupied('A'):
+            agv_at_b = self._find_agv_at_position('B')
+            if agv_at_b:
+                self.get_logger().info(f"Queue advance: {agv_at_b} B → A")
+                self._claimed_positions['A'] = agv_at_b
+                self._send_command_to_agv(agv_at_b, 'advance_to a')
+                # C→B fires automatically when agv_at_b confirms IDLE @ A (cascade)
+            else:
+                self.get_logger().info("Queue advance: no IDLE AGV at B to advance")
+        else:
+            self.get_logger().info(
+                f"Queue advance: A occupied/claimed ({self._claimed_positions.get('A', 'IDLE')}), skipping B→A"
+            )
+
+    def _trigger_cascade_advance(self, filled_position: str):
+        """
+        Called when an AGV confirms IDLE at filled_position (after ADVANCING).
+        Two actions:
+        1. Forward fill: if the slot directly ahead (toward A) is free, advance
+           the arriving AGV into it.  This handles the case where an AGV arrives
+           at B while A has been vacant (the _advance_queue_after_departure path
+           only fires on service-AGV departure, so a returning AGV can end up
+           stranded at B with A empty).
+        2. Backward fill: the slot the AGV vacated is now free; pull the next
+           AGV forward from further back in the queue.
+        """
+        queue = self.queue_positions  # ['A', 'B', 'C']
+        try:
+            filled_idx = queue.index(filled_position)
+        except ValueError:
+            return
+
+        # ── 1. Forward fill ──────────────────────────────────────────────────
+        # If there is a slot ahead AND it is free (no AGV in any state, not
+        # claimed), advance the just-arrived AGV into it.
+        if filled_idx > 0:
+            ahead_pos = queue[filled_idx - 1]
+            ahead_occupied = (
+                self._claimed_positions.get(ahead_pos)
+                or any(
+                    s.get('position') == ahead_pos
+                    for s in self.agv_detailed_status.values()
+                )
+            )
+            if not ahead_occupied:
+                arriving_agv = self._find_agv_at_position(filled_position)
+                if arriving_agv:
+                    self.get_logger().info(
+                        f"Cascade forward: {arriving_agv} {filled_position} → {ahead_pos} "
+                        f"(slot ahead is free)"
+                    )
+                    self._claimed_positions[ahead_pos] = arriving_agv
+                    self._send_command_to_agv(arriving_agv, f'advance_to {ahead_pos.lower()}')
+                    # Forward advance already issued — return so we don't also
+                    # try to pull a backward AGV into the now-still-occupied
+                    # filled_position in the same tick.
+                    return
+
+        # ── 2. Backward fill ─────────────────────────────────────────────────
+        # The slot the AGV just vacated (one step behind filled_position) is
+        # now physically clear; pull the next waiting AGV forward into it.
+        vacated_idx = filled_idx + 1
+        if vacated_idx >= len(queue):
+            return  # Nothing behind the last position
+
+        vacated_pos = queue[vacated_idx]  # e.g. 'B' when filled_position='A'
+
+        if self._claimed_positions.get(vacated_pos) or self._find_agv_at_position(vacated_pos):
+            self.get_logger().info(
+                f"Cascade: {vacated_pos} still occupied/claimed, skipping"
+            )
+            return
+
+        further_idx = vacated_idx + 1
+        if further_idx >= len(queue):
+            self.get_logger().info(
+                f"Cascade: no slot further back than {vacated_pos} to pull from"
+            )
+            return
+
+        further_pos = queue[further_idx]  # e.g. 'C' when vacated_pos='B'
+        agv = self._find_agv_at_position(further_pos)
+        if agv:
+            self.get_logger().info(f"Cascade advance: {agv} {further_pos} → {vacated_pos}")
+            self._claimed_positions[vacated_pos] = agv
+            self._send_command_to_agv(agv, f'advance_to {vacated_pos.lower()}')
+        else:
+            self.get_logger().info(
+                f"Cascade: no IDLE AGV at {further_pos} to fill {vacated_pos}"
+            )
+
+    def _acquire_agv_for_pickup(self, pickup_location: str,
+                                timeout: float = 30.0) -> Optional[str]:
+        """
+        Return an IDLE AGV at pickup_location, advancing one forward in the queue
+        if none is there yet.  Polls for up to *timeout* seconds.
+        """
+        deadline = time.time() + timeout
+        advance_sent = False
+
+        while time.time() < deadline:
+            agv = self._find_agv_at_position(pickup_location)
+            if agv:
+                return agv
+
+            # Trigger a one-step advance toward pickup_location if we haven't yet
+            if not advance_sent:
+                queue = self.queue_positions
+                try:
+                    target_idx = queue.index(pickup_location)
+                except ValueError:
+                    break
+                for idx in range(target_idx + 1, len(queue)):
+                    candidate = self._find_agv_at_position(queue[idx])
+                    if candidate:
+                        next_pos = queue[idx - 1]
+                        self.get_logger().info(
+                            f"Proactive advance: {candidate} {queue[idx]} → {next_pos}"
+                        )
+                        self._claimed_positions[next_pos] = candidate
+                        self._send_command_to_agv(candidate, f'advance_to {next_pos.lower()}')
+                        advance_sent = True
+                        break
+
+            time.sleep(0.5)
+
+        return None
+
+    def _find_return_position(self, returning_agv_id: str) -> str:
+        """
+        Find the furthest-back free queue position for a returning AGV.
+        Checks C → B → A and returns the first unoccupied AND unclaimed slot.
+        Claimed positions are those an AGV has already been told to advance into
+        but hasn't yet reported IDLE at — skipping them prevents two AGVs being
+        routed to the same physical slot simultaneously.
+        """
+        for pos in reversed(self.queue_positions):   # C, B, A
+            if (self._find_agv_at_position(pos) is None
+                    and pos not in self._claimed_positions):
+                return pos
+        return self.queue_positions[-1]              # fallback to back of queue
 
     def _advance_agv_to_pickup(self, agv_id: str, from_pos: str, to_pos: str) -> bool:
         """
@@ -591,34 +752,32 @@ class AGVFactoryNode(Node):
         # Set the event to unblock any waiting operation
         self.ready_to_return_event.set()
 
-        # If we have an AGV currently in service and waiting for unload, send ready
-        if self.current_service_agv:
-            agv_status = self.agv_detailed_status.get(self.current_service_agv, {})
-            current_state = agv_status.get('state', 'UNKNOWN')
+        # Two AGVs can be in service simultaneously (e.g. one going to D, one to E).
+        # current_service_agv only tracks the most recent one, so we cannot rely on
+        # it to identify which AGV is actually sitting at a destination waiting to
+        # return. Always scan all AGVs for any that are at a destination.
+        returned_any = False
+        for agv_key in [f'agv_{i}' for i in self.agv_ids]:
+            status = self.agv_detailed_status.get(agv_key, {})
+            state    = status.get('state', 'UNKNOWN')
+            position = status.get('position', '')
+            if state in ('ARRIVED', 'WAITING_UNLOAD') and position in self.destinations:
+                return_pos = self._find_return_position(agv_key)
+                self.get_logger().info(
+                    f"   Sending 'return_to {return_pos}' + 'ready' to {agv_key} (at {position})"
+                )
+                self._send_command_to_agv(agv_key, f'return_to {return_pos.lower()}')
+                self._send_command_to_agv(agv_key, 'ready')
+                self._publish_global_status(f"AGV_RETURNING_TO_QUEUE ({return_pos})")
+                returned_any = True
 
-            if current_state in ['WAITING_UNLOAD', 'ARRIVED']:
-                self.get_logger().info(f"   Sending 'ready' to {self.current_service_agv}")
-                self._send_command_to_agv(self.current_service_agv, 'ready')
-                self._publish_global_status("AGV_RETURNING_TO_QUEUE")
-            else:
-                self.get_logger().info(f"   {self.current_service_agv} state is {current_state}, ready signal queued")
-        else:
-            # No AGV in service - auto-detect AGV at destination waiting for unload
-            self.get_logger().info("   No AGV in service, auto-detecting AGV at destination...")
-
-            available_agv = self._find_agv_at_destination()
-
-            if available_agv:
-                self.get_logger().info(f"   Found {available_agv} at destination, sending return command")
-
-                # Set as current service AGV
-                self.current_service_agv = available_agv
-
-                # Send ready to return to queue
-                self._send_command_to_agv(available_agv, 'ready')
-                self._publish_global_status("AGV_RETURNING_TO_QUEUE")
-            else:
-                self.get_logger().warn("   No AGV found at destination waiting for unload")
+        if not returned_any:
+            # No AGV at a destination yet — it is still in transit.
+            # The ARRIVED handler will call _handle_ready_to_return again when it lands.
+            svc = self.current_service_agv or 'unknown'
+            self.get_logger().info(
+                f"   No AGV at destination yet ({svc} still in transit) — signal noted"
+            )
 
         # Send ACK back to superfactory
         self._publish_global_ack("READY_TO_RETURN")
@@ -637,8 +796,8 @@ class AGVFactoryNode(Node):
             state = status.get('state', 'UNKNOWN')
             last_update = status.get('last_update', 0)
 
-            # Check if AGV is online (updated within last 5 seconds)
-            is_online = (time.time() - last_update) < 5.0
+            # Check if AGV is online (updated within last 30 seconds)
+            is_online = (time.time() - last_update) < 30.0
 
             # AGV at destination (D, E, etc.) and in WAITING_UNLOAD or ARRIVED state
             if position in self.destinations and state in ['WAITING_UNLOAD', 'ARRIVED'] and is_online:
@@ -672,13 +831,6 @@ class AGVFactoryNode(Node):
         pickup_str = parts[1].strip()
         drop_str = parts[2].strip()
 
-        # Parse robot ID
-        agv_id = self._parse_agv_id(robot_id_str)
-
-        if not agv_id:
-            self.get_logger().error(f"Invalid AGV ID: {robot_id_str}")
-            return
-
         # Parse pickup location
         pickup_location = self._parse_location(pickup_str, 'PICKUP')
 
@@ -689,25 +841,21 @@ class AGVFactoryNode(Node):
             self.get_logger().error(f"Failed to parse locations from command")
             return
 
-        self.get_logger().info(f"Routing command to {agv_id}: {pickup_location} -> {drop_location}")
+        # Use whichever AGV is (or will soon arrive) at the pickup position —
+        # the command may name AGV1 but any IDLE AGV at A is interchangeable.
+        # This lets AGV2 serve the next order while AGV1 is still returning.
+        self.get_logger().info(f"Looking for available AGV at {pickup_location}...")
+        agv_id = self._acquire_agv_for_pickup(pickup_location, timeout=30.0)
+        if not agv_id:
+            self.get_logger().error(
+                f"No AGV reached {pickup_location} within 30 s — aborting command"
+            )
+            # Publish COMMAND_COMPLETE so superfactory doesn't hang on task_complete timeout
+            self._publish_global_status("COMMAND_COMPLETE")
+            return
+
+        self.get_logger().info(f"Routing command to {agv_id}: {pickup_location} → {drop_location}")
         self._publish_global_status(f"{agv_id.upper()}_EXECUTING")
-
-        # Check if AGV needs to advance to the pickup position first
-        agv_status = self.agv_detailed_status.get(agv_id, {})
-        current_pos = agv_status.get('position', 'UNKNOWN')
-
-        if current_pos != pickup_location:
-            if (pickup_location in self.queue_positions
-                    and current_pos in self.queue_positions):
-                self.get_logger().info(
-                    f"{agv_id} at {current_pos}, advancing to pickup {pickup_location}")
-                if not self._advance_agv_to_pickup(agv_id, current_pos, pickup_location):
-                    self.get_logger().error(
-                        f"Could not advance {agv_id} to {pickup_location}, aborting command")
-                    return
-            else:
-                self.get_logger().warn(
-                    f"{agv_id} not at pickup location {pickup_location} (currently at {current_pos})")
 
         # Track current service
         self.current_service_agv = agv_id

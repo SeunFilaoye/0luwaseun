@@ -222,6 +222,23 @@ node_mappings:
     position_key: "P12"
     description: "Robot 6 pickup from AGV node D"
 
+  # AGV Vendor 2 nodes
+  XARM1_AGV2_DROP:
+    vendor: "lite6"
+    robot: "XARM1"
+    drop_location: "AGV2"
+    description: "XARM1 drop to AGV Vendor 2 node A"
+
+  AGV2_NODE_D:
+    vendor: "agv2"
+    description: "AGV Vendor 2 node D — R4 picks from here"
+
+  R4_AGV2_D_PICKUP:
+    vendor: "niryo"
+    robot: "R4"
+    position_key: "P12"
+    description: "Robot 4 pickup from AGV Vendor 2 node D"
+
   R6_C8_PICKUP:
     vendor: "niryo"
     robot: "R6"
@@ -430,3 +447,23 @@ edge_mappings:
     command_template: null
     vendor: "conveyor"
     robot: null
+
+  # ==================== ROUTE 7: XARM1_C1 → AGV2 → RED_BIN ====================
+  - from: "XARM1_C1"
+    to: "XARM1_AGV2_DROP"
+    command_template: "XARM1 | PICKUP - ASRS {column} {row} | DROP - AGV2 A"
+    vendor: "lite6"
+    robot: "XARM1"
+
+  - from: "XARM1_AGV2_DROP"
+    to: "AGV2_NODE_D"
+    command_template: "AGV4 | PICKUP - A | DROP - D"
+    vendor: "agv2"
+    robot: null
+
+  - from: "AGV2_NODE_D"
+    to: "RED_BIN"
+    command_template: null
+    vendor: "niryo"
+    robot: "R4"
+    # R4 is dispatched by superfactory._handle_agv2_arrival when AGV2 arrives at D.

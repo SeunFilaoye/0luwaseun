@@ -3,10 +3,10 @@
 
 conveyor_1:
   robot_namespace: "robot1"        # ← NEW: Physical connection
-  conveyor_hardware_id: 9
+  conveyor_hardware_id: 10
   speed: 70
   description: "Conveyor C1 - Feeds Robot R1 from X-arm1"
-  
+
   sensors:
     forward:
       pin: "DI5"
@@ -17,10 +17,10 @@ conveyor_1:
 
 conveyor_2:
   robot_namespace: "robot1"        # ← FIXED: C2 is on R1's panel (hardware_id 10)
-  conveyor_hardware_id: 10
+  conveyor_hardware_id: 9
   speed: 70
   description: "Conveyor C2 - Feeds Robot R1 from X-arm1 or X-arm2"
-  
+
   sensors:
     forward:
       pin: "DI3"
@@ -121,9 +121,9 @@ metadata:
   
   # NEW: Physical topology documentation
   physical_topology:
-    robot1: 
+    robot1:
       conveyors: [1, 2]
-      hardware_ids: [9, 10]
+      hardware_ids: [10, 9]
     robot2:
       conveyors: [3]
       hardware_ids: [9]

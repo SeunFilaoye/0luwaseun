@@ -193,11 +193,19 @@ class ASRSFactoryNode(Node):
                 if not part_id.startswith('part_'):
                     part_id = f"part_{part_id}"
 
-            # Look up locations
+            # Look up locations — return first available and remove it so the
+            # next order for the same part type advances to the next row.
             if part_id in self.inventory:
                 locations = self.inventory[part_id]
-                response[part_id] = locations
-                self.get_logger().info(f"   ✓ {part_id}: {len(locations)} locations")
+                if locations:
+                    next_loc = locations.pop(0)
+                    response[part_id] = [next_loc]
+                    self.get_logger().info(
+                        f"   ✓ {part_id}: dispatching {next_loc} "
+                        f"({len(locations)} remaining)")
+                else:
+                    response[part_id] = []
+                    self.get_logger().warn(f"   ⚠️ {part_id}: inventory exhausted")
             else:
                 self.get_logger().warn(f"   ⚠️ {part_id}: NOT FOUND in inventory")
                 response[part_id] = []
