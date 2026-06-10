@@ -1,0 +1,398 @@
+topic,timestamp_abs_s,timestamp_rel_s,message
+/lite6_factory/command,1780730919.172201,0.000,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C1 R1 | DROP - CONVEYOR 1"", ""token"": ""b210cdd93ea3eb4f7243dd0bcbfeee373087d6b00e8dd2445dc7b35b6d1408eb""}"
+/lite6_factory/command,1780730919.176612,0.004,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C4 R1 | DROP - CONVEYOR 4"", ""token"": ""b210cdd93ea3eb4f7243dd0bcbfeee373087d6b00e8dd2445dc7b35b6d1408eb""}"
+/lite6_factory/status,1780730919.181216,0.009,XARM1_EXECUTING
+/lite6_factory/status,1780730919.187084,0.015,XARM2_EXECUTING
+/lite6_factory/status,1780730938.921942,19.750,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780730939.108109,19.936,COMMAND_COMPLETE:XARM1
+/lite6_factory/command,1780730939.146645,19.974,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C1 R2 | DROP - CONVEYOR 2"", ""token"": ""b210cdd93ea3eb4f7243dd0bcbfeee373087d6b00e8dd2445dc7b35b6d1408eb""}"
+/lite6_factory/status,1780730939.151249,19.979,XARM1_EXECUTING
+/lite6_factory/command,1780730939.153233,19.981,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C4 R2 | DROP - AGV A"", ""token"": ""b210cdd93ea3eb4f7243dd0bcbfeee373087d6b00e8dd2445dc7b35b6d1408eb""}"
+/lite6_factory/status,1780730939.160434,19.988,XARM2_EXECUTING
+/niryo_factory/status,1780730944.748320,25.576,IR_READY | R1 | P11 | C1
+/niryo_factory/command,1780730944.757380,25.585,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P11 | DROP - D15"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730944.759195,25.587,ACK:R1 | PICKUP - P11 | DROP - D15
+/niryo_factory/status,1780730946.426118,27.254,IR_READY | R3 | P14 | C4
+/niryo_factory/command,1780730946.440988,27.269,"{""src"": ""/super_factory"", ""cmd"": ""R3 | PICKUP - P14 | DROP - D18"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730946.444079,27.272,ACK:R3 | PICKUP - P14 | DROP - D18
+/lite6_factory/status,1780730954.712774,35.541,READY_XARM2
+/agv_factory/command,1780730954.721835,35.550,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""65567bd32783cfc3d13fa8128482e889a73a4ad4d4680cf5b6e7c27e71ac9268""}"
+/agv_factory/ack,1780730954.723191,35.551,ACK - READY_TO_MOVE
+/agv_factory/ack,1780730954.732520,35.560,ACK - READY_TO_MOVE
+/lite6_factory/status,1780730957.686579,38.514,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780730958.575529,39.403,COMMAND_COMPLETE:XARM1
+/agv_factory/command,1780730958.601093,39.429,"{""src"": ""/super_factory"", ""cmd"": ""AGV1 | PICKUP - A | DROP - D"", ""token"": ""65567bd32783cfc3d13fa8128482e889a73a4ad4d4680cf5b6e7c27e71ac9268""}"
+/agv_factory/ack,1780730958.603582,39.431,ACK - AGV1 | PICKUP - A | DROP - D
+/agv_factory/status,1780730958.612680,39.440,AGV_1_EXECUTING
+/lite6_factory/command,1780730958.637780,39.466,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C1 R3 | DROP - AGV2 A"", ""token"": ""a04b73dafb9fc8870e7696b38f979c62db6bd495bdd650fd8a3b96b2e001e229""}"
+/lite6_factory/command,1780730958.640977,39.469,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C4 R3 | DROP - CONVEYOR 2"", ""token"": ""a04b73dafb9fc8870e7696b38f979c62db6bd495bdd650fd8a3b96b2e001e229""}"
+/lite6_factory/status,1780730958.650507,39.478,XARM1_EXECUTING
+/lite6_factory/status,1780730958.655544,39.483,XARM2_EXECUTING
+/agv_factory/status,1780730958.817676,39.645,AGV_WAITING_FOR_LOAD
+/agv_factory/status,1780730958.923514,39.751,AGV_MOVING_TO_DESTINATION
+/niryo_factory/status,1780730960.551362,41.379,IR_READY | R1 | P12 | C2
+/niryo_factory/status,1780730967.586776,48.415,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780730967.605064,48.433,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D13"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730967.607144,48.435,ACK:R1 | PICKUP - P12 | DROP - D13
+/niryo_factory/status,1780730968.971207,49.799,COMMAND_COMPLETE:R3
+/niryo_factory/status,1780730971.776423,52.604,IR_READY | R4 | P15 | C5
+/niryo_factory/command,1780730971.787180,52.615,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P15 | DROP - D16"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730971.788782,52.617,ACK:R4 | PICKUP - P15 | DROP - D16
+/niryo_factory/status,1780730972.874819,53.703,IR_READY | R6 | P18 | C8
+/niryo_factory/command,1780730972.889642,53.717,"{""src"": ""/super_factory"", ""cmd"": ""R6 | PICKUP - P18 | DROP - D11"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730972.892442,53.720,ACK:R6 | PICKUP - P18 | DROP - D11
+/lite6_factory/status,1780730976.340062,57.168,READY_XARM1
+/agv_factory2/command,1780730976.351121,57.179,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""c85ee3a15c309a1699fa06e48a3c905796db10eef170675e1fd2c2b3992b14cf""}"
+/agv_factory2/ack,1780730976.352652,57.180,ACK - READY_TO_MOVE
+/agv_factory2/ack,1780730976.364212,57.192,ACK - READY_TO_MOVE
+/lite6_factory/status,1780730978.375600,59.203,COMMAND_COMPLETE:XARM2
+/niryo_factory/status,1780730979.049079,59.877,READY
+/agv_factory/command,1780730979.056257,59.884,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""65567bd32783cfc3d13fa8128482e889a73a4ad4d4680cf5b6e7c27e71ac9268""}"
+/agv_factory/ack,1780730979.057331,59.885,ACK - READY_TO_RETURN
+/agv_factory/ack,1780730979.070488,59.898,ACK - READY_TO_RETURN
+/lite6_factory/status,1780730979.472500,60.300,COMMAND_COMPLETE:XARM1
+/agv_factory2/command,1780730979.508779,60.337,"{""src"": ""/super_factory"", ""cmd"": ""AGV4 | PICKUP - A | DROP - D"", ""token"": ""c85ee3a15c309a1699fa06e48a3c905796db10eef170675e1fd2c2b3992b14cf""}"
+/agv_factory2/ack,1780730979.510862,60.339,ACK - AGV4 | PICKUP - A | DROP - D
+/agv_factory2/status,1780730979.518082,60.346,AGV_4_EXECUTING
+/lite6_factory/command,1780730979.543878,60.372,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C1 R4 | DROP - CONVEYOR 1"", ""token"": ""a04b73dafb9fc8870e7696b38f979c62db6bd495bdd650fd8a3b96b2e001e229""}"
+/lite6_factory/command,1780730979.550500,60.378,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C4 R4 | DROP - AGV A"", ""token"": ""a04b73dafb9fc8870e7696b38f979c62db6bd495bdd650fd8a3b96b2e001e229""}"
+/lite6_factory/status,1780730979.553690,60.381,XARM1_EXECUTING
+/lite6_factory/status,1780730979.566355,60.394,XARM2_EXECUTING
+/agv_factory2/status,1780730979.723509,60.551,AGV_WAITING_FOR_LOAD
+/agv_factory2/status,1780730979.825983,60.654,AGV_MOVING_TO_DESTINATION
+/niryo_factory/status,1780730987.935836,68.764,COMMAND_COMPLETE:R1
+/niryo_factory/status,1780730988.708709,69.537,IR_READY | R1 | P12 | C2
+/niryo_factory/command,1780730988.724001,69.552,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D15"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730988.725385,69.553,ACK:R1 | PICKUP - P12 | DROP - D15
+/niryo_factory/status,1780730991.217557,72.045,COMMAND_COMPLETE:R6
+/niryo_factory/status,1780730991.218034,72.046,READY
+/agv_factory/command,1780730991.228391,72.056,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""65567bd32783cfc3d13fa8128482e889a73a4ad4d4680cf5b6e7c27e71ac9268""}"
+/agv_factory/ack,1780730991.229467,72.057,ACK - READY_TO_RETURN
+/agv_factory/ack,1780730991.237328,72.065,ACK - READY_TO_RETURN
+/niryo_factory/status,1780730991.816178,72.644,COMMAND_COMPLETE:R4
+/niryo_factory/status,1780730991.890478,72.718,IR_READY | R2 | P13 | C3
+/niryo_factory/command,1780730991.908483,72.736,"{""src"": ""/super_factory"", ""cmd"": ""R2 | PICKUP - P13 | DROP - D17"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730991.911620,72.739,ACK:R2 | PICKUP - P13 | DROP - D17
+/lite6_factory/status,1780730995.390859,76.219,READY_XARM2
+/agv_factory/command,1780730995.399040,76.227,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""65567bd32783cfc3d13fa8128482e889a73a4ad4d4680cf5b6e7c27e71ac9268""}"
+/agv_factory/ack,1780730995.400444,76.228,ACK - READY_TO_MOVE
+/agv_factory/ack,1780730995.412929,76.241,ACK - READY_TO_MOVE
+/niryo_factory/status,1780730995.988671,76.816,IR_READY | R4 | P16 | C6
+/niryo_factory/command,1780730996.005345,76.833,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P16 | DROP - D12"", ""token"": ""ceba6b07c8dda4745f9fe687704e552321f9a427f9217853bbac1df0d288373b""}"
+/niryo_factory/ack,1780730996.008278,76.836,ACK:R4 | PICKUP - P16 | DROP - D12
+/lite6_factory/status,1780730998.289560,79.117,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780730999.676068,80.504,COMMAND_COMPLETE:XARM1
+/agv_factory/command,1780730999.701738,80.530,"{""src"": ""/super_factory"", ""cmd"": ""AGV1 | PICKUP - A | DROP - E"", ""token"": ""65567bd32783cfc3d13fa8128482e889a73a4ad4d4680cf5b6e7c27e71ac9268""}"
+/agv_factory/ack,1780730999.703409,80.531,ACK - AGV1 | PICKUP - A | DROP - E
+/agv_factory/status,1780730999.710016,80.538,AGV_2_EXECUTING
+/lite6_factory/command,1780730999.739416,80.567,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C1 R5 | DROP - CONVEYOR 2"", ""token"": ""a04b73dafb9fc8870e7696b38f979c62db6bd495bdd650fd8a3b96b2e001e229""}"
+/lite6_factory/status,1780730999.743628,80.571,XARM1_EXECUTING
+/lite6_factory/command,1780730999.744824,80.573,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C4 R5 | DROP - CONVEYOR 4"", ""token"": ""a04b73dafb9fc8870e7696b38f979c62db6bd495bdd650fd8a3b96b2e001e229""}"
+/lite6_factory/status,1780730999.753135,80.581,XARM2_EXECUTING
+/agv_factory/status,1780730999.914857,80.743,AGV_WAITING_FOR_LOAD
+/agv_factory/status,1780731000.018316,80.846,AGV_MOVING_TO_DESTINATION
+/agv_factory/status,1780731000.290487,81.118,AGV_ARRIVED | agv_1 | Alvik1 | D
+/niryo_factory/command,1780731000.299428,81.127,"{""src"": ""/super_factory"", ""cmd"": ""R6 | PICKUP - P12 | DROP - D11"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731000.303072,81.131,ACK:R6 | PICKUP - P12 | DROP - D11
+/niryo_factory/status,1780731005.409820,86.238,IR_READY | R1 | P11 | C1
+/agv_factory2/status,1780731006.509260,87.337,AGV_ARRIVED | agv_4 | Alvik4 | D
+/niryo_factory/status,1780731008.560507,89.388,READY
+/agv_factory/command,1780731008.570506,89.398,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""ea907185f74b1e3a6a848ff5a1658a1c1268139a02b261aa9ab91515cc68d65c""}"
+/agv_factory/ack,1780731008.572344,89.400,ACK - READY_TO_RETURN
+/agv_factory/status,1780731008.790787,89.619,AGV_RETURNING_TO_QUEUE (C)
+/agv_factory/ack,1780731008.792036,89.620,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731009.851033,90.679,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731009.876259,90.704,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P11 | DROP - D13"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731009.877785,90.706,ACK:R1 | PICKUP - P11 | DROP - D13
+/niryo_factory/status,1780731014.034370,94.862,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731014.047866,94.876,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P12 | DROP - D16"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731014.049185,94.877,ACK:R4 | PICKUP - P12 | DROP - D16
+/niryo_factory/status,1780731014.130371,94.958,IR_READY | R4 | P15 | C5
+/niryo_factory/status,1780731014.944716,95.773,COMMAND_COMPLETE:R2
+/niryo_factory/status,1780731017.764058,98.592,IR_READY | R5 | P17 | C7
+/niryo_factory/status,1780731017.765893,98.594,IR_READY | R6 | P17 | C7
+/niryo_factory/command,1780731017.792785,98.621,"{""src"": ""/super_factory"", ""cmd"": ""R5 | PICKUP - P17 | DROP - D13"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731017.796117,98.624,ACK:R5 | PICKUP - P17 | DROP - D13
+/lite6_factory/status,1780731019.574986,100.403,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780731019.863007,100.691,COMMAND_COMPLETE:XARM1
+/lite6_factory/command,1780731019.909489,100.737,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C1 R6 | DROP - AGV2 A"", ""token"": ""a8b01b7cc465aff87179288853ccd9cc00a6356c060708b4e23d240e2b310595""}"
+/lite6_factory/command,1780731019.913923,100.742,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C4 R6 | DROP - CONVEYOR 2"", ""token"": ""a8b01b7cc465aff87179288853ccd9cc00a6356c060708b4e23d240e2b310595""}"
+/lite6_factory/status,1780731019.916561,100.744,XARM1_EXECUTING
+/lite6_factory/status,1780731019.923781,100.752,XARM2_EXECUTING
+/niryo_factory/status,1780731020.229977,101.058,COMMAND_COMPLETE:R6
+/niryo_factory/status,1780731020.230584,101.058,READY
+/agv_factory/command,1780731020.238375,101.066,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""ea907185f74b1e3a6a848ff5a1658a1c1268139a02b261aa9ab91515cc68d65c""}"
+/agv_factory/ack,1780731020.239972,101.068,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731020.246665,101.074,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731022.113763,102.942,IR_READY | R1 | P12 | C2
+/niryo_factory/status,1780731027.163123,107.991,IR_READY | R3 | P14 | C4
+/niryo_factory/command,1780731027.177811,108.006,"{""src"": ""/super_factory"", ""cmd"": ""R3 | PICKUP - P14 | DROP - D18"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731027.179097,108.007,ACK:R3 | PICKUP - P14 | DROP - D18
+/niryo_factory/status,1780731031.805003,112.633,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731031.821260,112.649,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D15"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731031.823211,112.651,ACK:R1 | PICKUP - P12 | DROP - D15
+/niryo_factory/status,1780731031.872372,112.700,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731031.887324,112.715,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P15 | DROP - D16"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731031.889459,112.717,ACK:R4 | PICKUP - P15 | DROP - D16
+/agv_factory2/command,1780731031.891086,112.719,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""aceb55d229a5d4039e2ede6a944c7ec473ffe768ffac6b96c090511fbdfbcc83""}"
+/agv_factory2/ack,1780731031.892513,112.720,ACK - READY_TO_RETURN
+/agv_factory2/status,1780731032.108289,112.936,AGV_RETURNING_TO_QUEUE (B)
+/agv_factory2/ack,1780731032.109890,112.938,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731035.784193,116.612,IR_READY | R2 | P13 | C3
+/niryo_factory/command,1780731035.797354,116.625,"{""src"": ""/super_factory"", ""cmd"": ""R2 | PICKUP - P13 | DROP - D17"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731035.798811,116.627,ACK:R2 | PICKUP - P13 | DROP - D17
+/niryo_factory/status,1780731036.092394,116.920,IR_READY | R4 | P16 | C6
+/niryo_factory/status,1780731036.521582,117.349,COMMAND_COMPLETE:R5
+/lite6_factory/status,1780731038.475893,119.304,READY_XARM1
+/agv_factory2/command,1780731038.494531,119.322,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""aceb55d229a5d4039e2ede6a944c7ec473ffe768ffac6b96c090511fbdfbcc83""}"
+/agv_factory2/ack,1780731038.496017,119.324,ACK - READY_TO_MOVE
+/agv_factory2/ack,1780731038.502070,119.330,ACK - READY_TO_MOVE
+/lite6_factory/status,1780731040.043695,120.871,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780731041.645754,122.474,COMMAND_COMPLETE:XARM1
+/agv_factory2/command,1780731041.669462,122.497,"{""src"": ""/super_factory"", ""cmd"": ""AGV4 | PICKUP - A | DROP - D"", ""token"": ""aceb55d229a5d4039e2ede6a944c7ec473ffe768ffac6b96c090511fbdfbcc83""}"
+/agv_factory2/ack,1780731041.671434,122.499,ACK - AGV4 | PICKUP - A | DROP - D
+/agv_factory2/status,1780731041.677518,122.505,AGV_5_EXECUTING
+/lite6_factory/command,1780731041.715508,122.543,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C2 R1 | DROP - CONVEYOR 1"", ""token"": ""a8b01b7cc465aff87179288853ccd9cc00a6356c060708b4e23d240e2b310595""}"
+/lite6_factory/command,1780731041.722078,122.550,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C5 R1 | DROP - CONVEYOR 4"", ""token"": ""a8b01b7cc465aff87179288853ccd9cc00a6356c060708b4e23d240e2b310595""}"
+/lite6_factory/status,1780731041.727221,122.555,XARM1_EXECUTING
+/lite6_factory/status,1780731041.733033,122.561,XARM2_EXECUTING
+/agv_factory2/status,1780731041.982910,122.811,AGV_WAITING_FOR_LOAD
+/agv_factory2/status,1780731042.085962,122.914,AGV_MOVING_TO_DESTINATION
+/niryo_factory/status,1780731049.708247,130.536,COMMAND_COMPLETE:R3
+/niryo_factory/status,1780731051.919743,132.748,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731051.939327,132.767,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P16 | DROP - D12"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731051.940524,132.768,ACK:R4 | PICKUP - P16 | DROP - D12
+/niryo_factory/status,1780731052.735761,133.564,IR_READY | R1 | P12 | C2
+/niryo_factory/status,1780731053.051968,133.880,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731053.067360,133.895,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D13"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731053.069126,133.897,ACK:R1 | PICKUP - P12 | DROP - D13
+/niryo_factory/status,1780731053.598690,134.426,IR_READY | R6 | P18 | C8
+/niryo_factory/command,1780731053.614737,134.443,"{""src"": ""/super_factory"", ""cmd"": ""R6 | PICKUP - P18 | DROP - D11"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731053.618105,134.446,ACK:R6 | PICKUP - P18 | DROP - D11
+/niryo_factory/status,1780731057.110419,137.938,IR_READY | R4 | P15 | C5
+/niryo_factory/status,1780731058.726892,139.555,COMMAND_COMPLETE:R2
+/niryo_factory/command,1780731058.742785,139.571,"{""src"": ""/super_factory"", ""cmd"": ""R2 | PICKUP - P15 | DROP - D17"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731058.745233,139.573,ACK:R2 | PICKUP - P15 | DROP - D17
+/niryo_factory/command,1780731058.758639,139.586,"{""src"": ""/super_factory"", ""cmd"": ""R5 | PICKUP - P17 | DROP - D12"", ""token"": ""d6d8b57a117e83831d61478aed530d4024fe7547125c348d02211df50d0f03a9""}"
+/niryo_factory/ack,1780731058.760491,139.588,ACK:R5 | PICKUP - P17 | DROP - D12
+/lite6_factory/status,1780731059.349656,140.177,COMMAND_COMPLETE:XARM2
+/niryo_factory/status,1780731060.105537,140.933,READY
+/agv_factory/command,1780731060.115911,140.944,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""c81a556a1862e9d12b2d5d254b14140bf2a7724f62a5b0ddd97596674ec7fa88""}"
+/agv_factory/ack,1780731060.118617,140.946,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731060.125648,140.953,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731061.983341,142.811,IR_READY | R5 | P17 | C7
+/niryo_factory/status,1780731061.985170,142.813,IR_READY | R6 | P17 | C7
+/lite6_factory/status,1780731062.448218,143.276,COMMAND_COMPLETE:XARM1
+/lite6_factory/command,1780731062.486521,143.314,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C2 R2 | DROP - CONVEYOR 2"", ""token"": ""78d3339df28ceb5062fea22d49bb1ee48d2b20822a8af1de9c99b38961417a3f""}"
+/lite6_factory/status,1780731062.490073,143.318,XARM1_EXECUTING
+/lite6_factory/command,1780731062.499985,143.328,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C5 R2 | DROP - AGV A"", ""token"": ""78d3339df28ceb5062fea22d49bb1ee48d2b20822a8af1de9c99b38961417a3f""}"
+/lite6_factory/status,1780731062.504483,143.332,XARM2_EXECUTING
+/niryo_factory/status,1780731066.988326,147.816,IR_READY | R4 | P16 | C6
+/niryo_factory/status,1780731067.027151,147.855,IR_READY | R3 | P14 | C4
+/niryo_factory/command,1780731067.042841,147.871,"{""src"": ""/super_factory"", ""cmd"": ""R3 | PICKUP - P14 | DROP - D18"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731067.044261,147.872,ACK:R3 | PICKUP - P14 | DROP - D18
+/niryo_factory/status,1780731068.577473,149.405,IR_READY | R1 | P11 | C1
+/niryo_factory/status,1780731070.063059,150.891,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731070.081170,150.909,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P16 | DROP - D12"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731070.083572,150.911,ACK:R4 | PICKUP - P16 | DROP - D12
+/agv_factory2/status,1780731071.935219,152.763,AGV_ARRIVED | agv_5 | Alvik5 | D
+/niryo_factory/status,1780731072.347407,153.175,COMMAND_COMPLETE:R6
+/niryo_factory/status,1780731072.348563,153.176,READY
+/agv_factory/command,1780731072.365320,153.193,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""c81a556a1862e9d12b2d5d254b14140bf2a7724f62a5b0ddd97596674ec7fa88""}"
+/agv_factory/ack,1780731072.366480,153.194,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731072.372302,153.200,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731073.196255,154.024,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731073.213592,154.041,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P11 | DROP - D15"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731073.216300,154.044,ACK:R1 | PICKUP - P11 | DROP - D15
+/niryo_factory/status,1780731077.148528,157.976,IR_READY | R2 | P13 | C3
+/niryo_factory/status,1780731077.483812,158.312,COMMAND_COMPLETE:R5
+/lite6_factory/status,1780731078.732259,159.560,READY_XARM2
+/agv_factory/command,1780731078.743780,159.572,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""c81a556a1862e9d12b2d5d254b14140bf2a7724f62a5b0ddd97596674ec7fa88""}"
+/agv_factory/ack,1780731078.745232,159.573,ACK - READY_TO_MOVE
+/agv_factory/ack,1780731078.753827,159.582,ACK - READY_TO_MOVE
+/lite6_factory/status,1780731081.624039,162.452,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780731082.409201,163.237,COMMAND_COMPLETE:XARM1
+/agv_factory/command,1780731082.442027,163.270,"{""src"": ""/super_factory"", ""cmd"": ""AGV1 | PICKUP - A | DROP - D"", ""token"": ""c81a556a1862e9d12b2d5d254b14140bf2a7724f62a5b0ddd97596674ec7fa88""}"
+/agv_factory/ack,1780731082.444276,163.272,ACK - AGV1 | PICKUP - A | DROP - D
+/lite6_factory/command,1780731082.460462,163.288,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C5 R3 | DROP - CONVEYOR 2"", ""token"": ""78d3339df28ceb5062fea22d49bb1ee48d2b20822a8af1de9c99b38961417a3f""}"
+/lite6_factory/command,1780731082.464631,163.292,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C2 R3 | DROP - AGV2 A"", ""token"": ""78d3339df28ceb5062fea22d49bb1ee48d2b20822a8af1de9c99b38961417a3f""}"
+/lite6_factory/status,1780731082.465725,163.294,XARM2_EXECUTING
+/lite6_factory/status,1780731082.472993,163.301,XARM1_EXECUTING
+/niryo_factory/status,1780731084.177272,165.005,COMMAND_COMPLETE:R2
+/niryo_factory/command,1780731084.200954,165.029,"{""src"": ""/super_factory"", ""cmd"": ""R2 | PICKUP - P13 | DROP - D17"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731084.202851,165.031,ACK:R2 | PICKUP - P13 | DROP - D17
+/niryo_factory/command,1780731084.206264,165.034,"{""src"": ""/super_factory"", ""cmd"": ""R5 | PICKUP - P17 | DROP - D13"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731084.207846,165.036,ACK:R5 | PICKUP - P17 | DROP - D13
+/niryo_factory/status,1780731084.886962,165.715,IR_READY | R1 | P12 | C2
+/niryo_factory/status,1780731087.221979,168.050,IR_READY | R5 | P17 | C7
+/niryo_factory/status,1780731087.222517,168.050,IR_READY | R6 | P17 | C7
+/agv_factory/status,1780731087.556182,168.384,AGV_1_EXECUTING
+/agv_factory/status,1780731087.764399,168.592,AGV_WAITING_FOR_LOAD
+/agv_factory/status,1780731087.866131,168.694,AGV_MOVING_TO_DESTINATION
+/niryo_factory/status,1780731087.911031,168.739,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731087.926255,168.754,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P12 | DROP - D16"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731087.929730,168.758,ACK:R4 | PICKUP - P12 | DROP - D16
+/niryo_factory/status,1780731089.472188,170.300,COMMAND_COMPLETE:R3
+/niryo_factory/status,1780731093.655745,174.484,IR_READY | R6 | P18 | C8
+/niryo_factory/command,1780731093.674765,174.503,"{""src"": ""/super_factory"", ""cmd"": ""R6 | PICKUP - P18 | DROP - D11"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731093.676985,174.505,ACK:R6 | PICKUP - P18 | DROP - D11
+/niryo_factory/status,1780731096.049302,176.877,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731096.067555,176.895,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D13"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731096.069481,176.897,ACK:R1 | PICKUP - P12 | DROP - D13
+/niryo_factory/status,1780731100.097449,180.925,READY
+/agv_factory/command,1780731100.108542,180.936,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""c81a556a1862e9d12b2d5d254b14140bf2a7724f62a5b0ddd97596674ec7fa88""}"
+/agv_factory/ack,1780731100.110587,180.938,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731100.116128,180.944,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731100.194219,181.022,IR_READY | R4 | P15 | C5
+/lite6_factory/status,1780731101.387506,182.215,COMMAND_COMPLETE:XARM2
+/niryo_factory/status,1780731102.835101,183.663,COMMAND_COMPLETE:R5
+/lite6_factory/status,1780731104.545202,185.373,READY_XARM1
+/agv_factory2/command,1780731104.557857,185.386,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""c3466bd109b43dc94455046ec20c6487bf618015814cca05036f226d63bb683a""}"
+/agv_factory2/ack,1780731104.559770,185.388,ACK - READY_TO_MOVE
+/agv_factory2/ack,1780731104.568511,185.396,ACK - READY_TO_MOVE
+/niryo_factory/status,1780731105.955292,186.783,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731105.970547,186.798,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P15 | DROP - D16"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731105.972320,186.800,ACK:R4 | PICKUP - P15 | DROP - D16
+/agv_factory2/command,1780731105.976034,186.804,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""c3466bd109b43dc94455046ec20c6487bf618015814cca05036f226d63bb683a""}"
+/agv_factory2/ack,1780731105.977584,186.805,ACK - READY_TO_RETURN
+/agv_factory2/status,1780731106.186829,187.015,AGV_RETURNING_TO_QUEUE (B)
+/agv_factory2/ack,1780731106.188284,187.016,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731107.133047,187.961,COMMAND_COMPLETE:R2
+/niryo_factory/command,1780731107.150559,187.978,"{""src"": ""/super_factory"", ""cmd"": ""R5 | PICKUP - P17 | DROP - D13"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731107.152440,187.980,ACK:R5 | PICKUP - P17 | DROP - D13
+/lite6_factory/status,1780731107.696485,188.524,COMMAND_COMPLETE:XARM1
+/agv_factory2/command,1780731107.724587,188.552,"{""src"": ""/super_factory"", ""cmd"": ""AGV4 | PICKUP - A | DROP - D"", ""token"": ""c3466bd109b43dc94455046ec20c6487bf618015814cca05036f226d63bb683a""}"
+/agv_factory2/ack,1780731107.727452,188.555,ACK - AGV4 | PICKUP - A | DROP - D
+/agv_factory2/status,1780731107.737056,188.565,AGV_4_EXECUTING
+/lite6_factory/command,1780731107.756543,188.584,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C2 R4 | DROP - CONVEYOR 1"", ""token"": ""78d3339df28ceb5062fea22d49bb1ee48d2b20822a8af1de9c99b38961417a3f""}"
+/lite6_factory/status,1780731107.760336,188.588,XARM1_EXECUTING
+/lite6_factory/command,1780731107.767683,188.595,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C5 R4 | DROP - AGV A"", ""token"": ""78d3339df28ceb5062fea22d49bb1ee48d2b20822a8af1de9c99b38961417a3f""}"
+/lite6_factory/status,1780731107.774029,188.602,XARM2_EXECUTING
+/agv_factory2/status,1780731108.042706,188.871,AGV_WAITING_FOR_LOAD
+/agv_factory2/status,1780731108.144499,188.972,AGV_MOVING_TO_DESTINATION
+/niryo_factory/status,1780731110.031365,190.859,IR_READY | R4 | P16 | C6
+/niryo_factory/status,1780731110.554233,191.382,IR_READY | R5 | P17 | C7
+/niryo_factory/status,1780731110.555649,191.383,IR_READY | R6 | P17 | C7
+/niryo_factory/status,1780731112.301885,193.130,COMMAND_COMPLETE:R6
+/niryo_factory/status,1780731112.302592,193.130,READY
+/agv_factory/command,1780731112.321090,193.149,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""c81a556a1862e9d12b2d5d254b14140bf2a7724f62a5b0ddd97596674ec7fa88""}"
+/agv_factory/ack,1780731112.323513,193.151,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731112.331296,193.159,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731116.296497,197.124,COMMAND_COMPLETE:R1
+/niryo_factory/status,1780731117.154852,197.983,IR_READY | R1 | P12 | C2
+/niryo_factory/command,1780731117.171687,197.999,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D15"", ""token"": ""75c05f0face6061e42455d7dc841a956d3bec0af5cc9635a749afe79a2c988fa""}"
+/niryo_factory/ack,1780731117.172893,198.001,ACK:R1 | PICKUP - P12 | DROP - D15
+/niryo_factory/status,1780731120.503027,201.331,IR_READY | R2 | P13 | C3
+/niryo_factory/command,1780731120.520359,201.348,"{""src"": ""/super_factory"", ""cmd"": ""R2 | PICKUP - P13 | DROP - D17"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731120.522499,201.350,ACK:R2 | PICKUP - P13 | DROP - D17
+/agv_factory/status,1780731122.587922,203.416,AGV_ARRIVED | agv_1 | Alvik1 | D
+/niryo_factory/command,1780731122.596739,203.425,"{""src"": ""/super_factory"", ""cmd"": ""R6 | PICKUP - P12 | DROP - D11"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731122.598753,203.427,ACK:R6 | PICKUP - P12 | DROP - D11
+/lite6_factory/status,1780731124.759035,205.587,READY_XARM2
+/agv_factory/command,1780731124.768438,205.596,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""43d887a3bc4b92508982abdbecf02a8a450f9d763a9825a4a208514969c3a9d2""}"
+/agv_factory/ack,1780731124.770721,205.599,ACK - READY_TO_MOVE
+/agv_factory/ack,1780731124.781806,205.610,ACK - READY_TO_MOVE
+/niryo_factory/status,1780731125.876315,206.704,COMMAND_COMPLETE:R5
+/niryo_factory/status,1780731125.997763,206.826,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731126.008439,206.836,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P16 | DROP - D12"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731126.011396,206.839,ACK:R4 | PICKUP - P16 | DROP - D12
+/lite6_factory/status,1780731127.692780,208.521,COMMAND_COMPLETE:XARM2
+/niryo_factory/status,1780731130.485264,211.313,READY
+/agv_factory/command,1780731130.496590,211.324,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""43d887a3bc4b92508982abdbecf02a8a450f9d763a9825a4a208514969c3a9d2""}"
+/agv_factory/ack,1780731130.498896,211.327,ACK - READY_TO_RETURN
+/agv_factory/status,1780731130.712419,211.540,AGV_RETURNING_TO_QUEUE (C)
+/agv_factory/ack,1780731130.713899,211.542,ACK - READY_TO_RETURN
+/lite6_factory/status,1780731130.783315,211.611,COMMAND_COMPLETE:XARM1
+/agv_factory/command,1780731130.805412,211.633,"{""src"": ""/super_factory"", ""cmd"": ""AGV1 | PICKUP - A | DROP - E"", ""token"": ""43d887a3bc4b92508982abdbecf02a8a450f9d763a9825a4a208514969c3a9d2""}"
+/agv_factory/ack,1780731130.807722,211.636,ACK - AGV1 | PICKUP - A | DROP - E
+/lite6_factory/command,1780731130.832873,211.661,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C5 R5 | DROP - CONVEYOR 4"", ""token"": ""b590f48be00965b74fbf488d7b45a7f14dd4b6a2b7891e952dc0a9466d932dbe""}"
+/lite6_factory/command,1780731130.841376,211.669,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C2 R5 | DROP - CONVEYOR 2"", ""token"": ""b590f48be00965b74fbf488d7b45a7f14dd4b6a2b7891e952dc0a9466d932dbe""}"
+/lite6_factory/status,1780731130.842540,211.670,XARM2_EXECUTING
+/lite6_factory/status,1780731130.851021,211.679,XARM1_EXECUTING
+/agv_factory2/status,1780731135.881926,216.710,AGV_ARRIVED | agv_4 | Alvik4 | D
+/niryo_factory/status,1780731136.742311,217.570,IR_READY | R1 | P11 | C1
+/niryo_factory/status,1780731138.296647,219.124,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731138.313486,219.141,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P11 | DROP - D13"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731138.314530,219.142,ACK:R1 | PICKUP - P11 | DROP - D13
+/niryo_factory/status,1780731142.404728,223.233,IR_READY | R4 | P15 | C5
+/niryo_factory/status,1780731142.424942,223.253,COMMAND_COMPLETE:R6
+/niryo_factory/status,1780731142.426038,223.254,READY
+/agv_factory/command,1780731142.436438,223.264,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""43d887a3bc4b92508982abdbecf02a8a450f9d763a9825a4a208514969c3a9d2""}"
+/agv_factory/ack,1780731142.437703,223.266,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731143.351824,224.180,COMMAND_COMPLETE:R2
+/niryo_factory/command,1780731143.371983,224.200,"{""src"": ""/super_factory"", ""cmd"": ""R5 | PICKUP - P17 | DROP - D13"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731143.373636,224.201,ACK:R5 | PICKUP - P17 | DROP - D13
+/niryo_factory/status,1780731144.040114,224.868,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731144.054273,224.882,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P12 | DROP - D16"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731144.055760,224.884,ACK:R4 | PICKUP - P12 | DROP - D16
+/niryo_factory/status,1780731144.240098,225.068,IR_READY | R4 | P16 | C6
+/niryo_factory/status,1780731146.604825,227.433,IR_READY | R5 | P17 | C7
+/niryo_factory/status,1780731146.605959,227.434,IR_READY | R6 | P17 | C7
+/lite6_factory/status,1780731150.467074,231.295,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780731152.070540,232.898,COMMAND_COMPLETE:XARM1
+/lite6_factory/command,1780731152.107743,232.936,"{""src"": ""/super_factory"", ""cmd"": ""XARM2 | PICKUP - ASRS C5 R6 | DROP - CONVEYOR 2"", ""token"": ""b590f48be00965b74fbf488d7b45a7f14dd4b6a2b7891e952dc0a9466d932dbe""}"
+/lite6_factory/command,1780731152.117085,232.945,"{""src"": ""/super_factory"", ""cmd"": ""XARM1 | PICKUP - ASRS C2 R6 | DROP - AGV2 A"", ""token"": ""b590f48be00965b74fbf488d7b45a7f14dd4b6a2b7891e952dc0a9466d932dbe""}"
+/lite6_factory/status,1780731152.117114,232.945,XARM2_EXECUTING
+/lite6_factory/status,1780731152.128018,232.956,XARM1_EXECUTING
+/niryo_factory/status,1780731154.475206,235.303,IR_READY | R1 | P12 | C2
+/niryo_factory/status,1780731158.189526,239.017,IR_READY | R3 | P14 | C4
+/niryo_factory/command,1780731158.205753,239.034,"{""src"": ""/super_factory"", ""cmd"": ""R3 | PICKUP - P14 | DROP - D18"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731158.207409,239.035,ACK:R3 | PICKUP - P14 | DROP - D18
+/niryo_factory/status,1780731160.040577,240.868,COMMAND_COMPLETE:R1
+/niryo_factory/command,1780731160.060554,240.888,"{""src"": ""/super_factory"", ""cmd"": ""R1 | PICKUP - P12 | DROP - D15"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731160.062300,240.890,ACK:R1 | PICKUP - P12 | DROP - D15
+/agv_factory/status,1780731160.822221,241.650,COMMAND_COMPLETE
+/agv_factory/ack,1780731160.839522,241.667,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731162.078547,242.906,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731162.091670,242.919,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P15 | DROP - D16"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731162.094903,242.923,ACK:R4 | PICKUP - P15 | DROP - D16
+/niryo_factory/status,1780731162.102455,242.930,COMMAND_COMPLETE:R5
+/agv_factory2/command,1780731162.106555,242.934,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""f5f6c32a3eb1c55c32c708f854f322585c62f0aeb6ef85f9bfdd8d793572782a""}"
+/agv_factory2/ack,1780731162.107805,242.936,ACK - READY_TO_RETURN
+/agv_factory2/status,1780731162.316186,243.144,AGV_RETURNING_TO_QUEUE (B)
+/agv_factory2/ack,1780731162.318079,243.146,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731164.386151,245.214,IR_READY | R2 | P13 | C3
+/niryo_factory/command,1780731164.399472,245.227,"{""src"": ""/super_factory"", ""cmd"": ""R2 | PICKUP - P13 | DROP - D17"", ""token"": ""dc8ae4b70c8886d93324fc79491a41fe82ab1119408990ba58a857aba6495ad1""}"
+/niryo_factory/ack,1780731164.401205,245.229,ACK:R2 | PICKUP - P13 | DROP - D17
+/lite6_factory/status,1780731172.145660,252.973,COMMAND_COMPLETE:XARM2
+/lite6_factory/status,1780731175.377475,256.205,READY_XARM1
+/agv_factory2/command,1780731175.390915,256.219,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_MOVE"", ""token"": ""f5f6c32a3eb1c55c32c708f854f322585c62f0aeb6ef85f9bfdd8d793572782a""}"
+/agv_factory2/ack,1780731175.392391,256.220,ACK - READY_TO_MOVE
+/agv_factory2/ack,1780731175.401962,256.230,ACK - READY_TO_MOVE
+/lite6_factory/status,1780731178.552283,259.380,COMMAND_COMPLETE:XARM1
+/agv_factory2/command,1780731178.579607,259.407,"{""src"": ""/super_factory"", ""cmd"": ""AGV4 | PICKUP - A | DROP - D"", ""token"": ""f5f6c32a3eb1c55c32c708f854f322585c62f0aeb6ef85f9bfdd8d793572782a""}"
+/agv_factory2/ack,1780731178.580972,259.409,ACK - AGV4 | PICKUP - A | DROP - D
+/agv_factory2/status,1780731178.591045,259.419,AGV_5_EXECUTING
+/niryo_factory/status,1780731178.648914,259.477,IR_READY | R4 | P16 | C6
+/agv_factory2/status,1780731178.697140,259.525,AGV_WAITING_FOR_LOAD
+/agv_factory2/status,1780731178.798368,259.626,AGV_MOVING_TO_DESTINATION
+/niryo_factory/status,1780731180.737858,261.566,COMMAND_COMPLETE:R3
+/niryo_factory/status,1780731181.288972,262.117,COMMAND_COMPLETE:R1
+/niryo_factory/status,1780731182.126201,262.954,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731182.143017,262.971,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P16 | DROP - D12"", ""token"": ""ace8d771902f50215f35f60b90dc85fc548f382f3c4984e8cbe1d45c0140beb9""}"
+/niryo_factory/ack,1780731182.144132,262.972,ACK:R4 | PICKUP - P16 | DROP - D12
+/niryo_factory/status,1780731184.902621,265.730,IR_READY | R6 | P18 | C8
+/niryo_factory/command,1780731184.922814,265.751,"{""src"": ""/super_factory"", ""cmd"": ""R6 | PICKUP - P18 | DROP - D11"", ""token"": ""ace8d771902f50215f35f60b90dc85fc548f382f3c4984e8cbe1d45c0140beb9""}"
+/niryo_factory/ack,1780731184.923931,265.752,ACK:R6 | PICKUP - P18 | DROP - D11
+/niryo_factory/status,1780731187.333052,268.161,COMMAND_COMPLETE:R2
+/niryo_factory/command,1780731187.347717,268.176,"{""src"": ""/super_factory"", ""cmd"": ""R5 | PICKUP - P17 | DROP - D12"", ""token"": ""ace8d771902f50215f35f60b90dc85fc548f382f3c4984e8cbe1d45c0140beb9""}"
+/niryo_factory/ack,1780731187.350677,268.178,ACK:R5 | PICKUP - P17 | DROP - D12
+/niryo_factory/status,1780731190.623647,271.451,IR_READY | R5 | P17 | C7
+/niryo_factory/status,1780731190.625347,271.453,IR_READY | R6 | P17 | C7
+/niryo_factory/status,1780731191.408142,272.236,READY
+/agv_factory/command,1780731191.421988,272.250,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""064a3441534d98d1e477e18a8557e0a23a806571d529e1522c4054d61d487867""}"
+/agv_factory/ack,1780731191.423092,272.251,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731191.435353,272.263,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731200.166953,280.995,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731200.180266,281.008,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P16 | DROP - D12"", ""token"": ""ace8d771902f50215f35f60b90dc85fc548f382f3c4984e8cbe1d45c0140beb9""}"
+/niryo_factory/ack,1780731200.181595,281.009,ACK:R4 | PICKUP - P16 | DROP - D12
+/niryo_factory/status,1780731203.547717,284.376,COMMAND_COMPLETE:R6
+/niryo_factory/status,1780731203.548549,284.376,READY
+/agv_factory/command,1780731203.561784,284.390,"{""src"": ""/super_factory"", ""cmd"": ""READY_TO_RETURN"", ""token"": ""064a3441534d98d1e477e18a8557e0a23a806571d529e1522c4054d61d487867""}"
+/agv_factory/ack,1780731203.563537,284.391,ACK - READY_TO_RETURN
+/agv_factory/ack,1780731203.575768,284.404,ACK - READY_TO_RETURN
+/niryo_factory/status,1780731206.077359,286.905,COMMAND_COMPLETE:R5
+/agv_factory2/status,1780731208.244833,289.073,AGV_ARRIVED | agv_5 | Alvik5 | D
+/niryo_factory/status,1780731218.204413,299.032,COMMAND_COMPLETE:R4
+/niryo_factory/command,1780731218.210483,299.038,"{""src"": ""/super_factory"", ""cmd"": ""R4 | PICKUP - P12 | DROP - D16"", ""token"": ""ace8d771902f50215f35f60b90dc85fc548f382f3c4984e8cbe1d45c0140beb9""}"
+/niryo_factory/ack,1780731218.211742,299.040,ACK:R4 | PICKUP - P12 | DROP - D16

@@ -27,20 +27,20 @@ xarm1:
       description: "Approach position before conveyor 1"
 
     Conveyor1_drop:
-      tcp: [125,-296.8,138.6,126.2,-4.1,4]
-      joints: [-64,46.5,57.6,203.5,43.8,-271.8]
+      tcp: [158.9,-289.8,127.2,-122.3,-0.8,-178.5]
+      joints: [-56.2,51.9,62.6,218.2,49.4,-100.1]
       type: TRANSIT
       description: "Conveyor 1 drop off position"
 
     Conveyor2_approach:
-      tcp: [-153.9,149.6,281.9,-90.1,-3.6,42.4]
-      joints: [136.7,-10,18.6,185.5,61.7,-96.8]
+      tcp: [-230.5,141.9,181.4,113.1,3.8,-123.9]
+      joints: [148.9,28.1,36.3,5,-59.2,-95.4]
       type: TRANSIT
       description: "Approach position before conveyor 2"
 
     Conveyor2_drop:
-      tcp: [-317.7,148.3,156.4,-127.6,-3.1,62.7]
-      joints: [155.3,46,65.1,7.5,-33.9,82.5]
+      tcp: [-287.8,186.4,134.7,127.4,4.7,-124.4]
+      joints: [147.6,49.7,63.9,7.3,-39.1,-98.7]
       type: TRANSIT
       description: "Conveyor 2 drop off position"
 

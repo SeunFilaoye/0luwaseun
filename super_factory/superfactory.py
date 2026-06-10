@@ -131,6 +131,13 @@ class SuperFactoryNode(Node):
         # XARM picks pipeline ahead (prevents cross-batch robot conflicts)
         self.niryo_batch_semaphore = threading.Semaphore(1)
 
+        # AGV readiness gates: set when the relevant fleet has an IDLE AGV at
+        # position A.  Cleared when an XARM-to-AGV command is dispatched so the
+        # next batch must wait for fresh confirmation rather than reusing a stale
+        # token.  Prevents the xArm dropping a part onto an empty loading slot.
+        self._agv_at_a = threading.Event()   # vendor 1  (AGV1/2/3)
+        self._agv2_at_a = threading.Event()  # vendor 2  (AGV4/5)
+
         # Guards against ghost Niryo dispatches when an upstream pick failed.
         # Counts how many xArm drops onto each AGV fleet are in-flight.
         # Each arrival consumes one count; dispatch is suppressed only at zero.
@@ -802,6 +809,33 @@ class SuperFactoryNode(Node):
 
         def run_arm_group(arm_id: str, group_tasks: list):
             for task in group_tasks:
+                # If this arm will drop onto an AGV, wait for a confirmed IDLE AGV
+                # at position A before starting the pick.  The arm takes ~18 s to
+                # pick from the ASRS, so this wait only adds delay when no AGV is
+                # ready yet (e.g. the previous batch's AGV hasn't returned).
+                cmd = task.get('command', '')
+                drop_segment = cmd.split('|')[2].upper() if cmd.count('|') >= 2 else ''
+                if 'AGV' in drop_segment:
+                    agv_vendor = 'agv2' if 'AGV2' in drop_segment else 'agv'
+                    ready_evt = self._agv2_at_a if agv_vendor == 'agv2' else self._agv_at_a
+                    if not ready_evt.is_set():
+                        self.get_logger().info(
+                            f"⏳ {arm_id}: waiting for IDLE AGV at A "
+                            f"({agv_vendor}) before dispatching pick..."
+                        )
+                    confirmed = ready_evt.wait(timeout=60.0)
+                    # Consume the token — the AGV will leave A once xArm drops onto it
+                    ready_evt.clear()
+                    if confirmed:
+                        self.get_logger().info(
+                            f"✅ {arm_id}: AGV confirmed at A ({agv_vendor}), dispatching"
+                        )
+                    else:
+                        self.get_logger().warn(
+                            f"⚠️ {arm_id}: 60 s timeout waiting for AGV at A ({agv_vendor}) "
+                            f"— dispatching anyway to avoid deadlock"
+                        )
+
                 if arm_id not in self.xarm_completion_events:
                     self.xarm_completion_events[arm_id] = threading.Event()
                 evt = self.xarm_completion_events[arm_id]
@@ -1104,6 +1138,15 @@ class SuperFactoryNode(Node):
             'COMPLETE' in stripped and ':' not in stripped
         ):
             self.task_complete.set()
+
+        # AGV readiness at loading position A
+        if status_msg.strip() == 'AGV_READY_AT_A':
+            if vendor == 'agv':
+                self._agv_at_a.set()
+                self.get_logger().info("✅ AGV1 fleet: IDLE AGV at A confirmed")
+            elif vendor == 'agv2':
+                self._agv2_at_a.set()
+                self.get_logger().info("✅ AGV2 fleet: IDLE AGV at A confirmed")
 
         # Handle AGV arrival events
         if vendor == 'agv' and status_msg.upper().startswith('AGV_ARRIVED'):

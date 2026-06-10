@@ -264,6 +264,11 @@ class AGVFactoryNode(Node):
                     if prev in ('ADVANCING', 'RETURNING'):
                         self._trigger_cascade_advance(position)
 
+                    # Notify superfactory the moment an IDLE AGV reaches the loading
+                    # position so the XARM can be held until the slot is confirmed filled.
+                    if position == self.queue_positions[0]:  # 'A'
+                        self._publish_global_status('AGV_READY_AT_A')
+
                 # When the service AGV departs on its delivery trip, advance the queue.
                 # Trigger on any → MOVING transition; WAITING_LOAD is the normal
                 # path but a fast READY can cause IDLE→MOVING directly.
@@ -571,10 +576,16 @@ class AGVFactoryNode(Node):
         # claimed), advance the just-arrived AGV into it.
         if filled_idx > 0:
             ahead_pos = queue[filled_idx - 1]
+            # Only count an AGV as occupying a queue slot if it is physically parked
+            # there (IDLE or WAITING_LOAD).  MOVING/ADVANCING/RETURNING AGVs report
+            # their last known position even while in transit, so checking state='*'
+            # would falsely block the forward fill (e.g. AGV2 reports MOVING @ A after
+            # departing, making A look occupied to AGV1 arriving at B).
             ahead_occupied = (
                 self._claimed_positions.get(ahead_pos)
                 or any(
                     s.get('position') == ahead_pos
+                    and s.get('state') in ('IDLE', 'WAITING_LOAD')
                     for s in self.agv_detailed_status.values()
                 )
             )

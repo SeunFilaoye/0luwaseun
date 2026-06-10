@@ -254,6 +254,11 @@ class AGVFactory2Node(Node):
                     if prev_state == 'ADVANCING':
                         self._trigger_cascade_advance(position)
 
+                    # Notify superfactory the moment an IDLE AGV reaches the loading
+                    # position so the XARM can be held until the slot is confirmed filled.
+                    if position == self.queue_positions[0]:  # 'A'
+                        self._publish_global_status('AGV_READY_AT_A')
+
                 # When the service AGV departs on its delivery trip, advance the queue
                 if state == 'MOVING' and agv_id == self.current_service_agv:
                     threading.Thread(
