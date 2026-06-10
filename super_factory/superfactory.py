@@ -529,13 +529,6 @@ class SuperFactoryNode(Node):
                 f"({[len(c) for c in route_chains]})"
             )
 
-            # Clear stale IR flags so any heartbeat-triggered flags from parts
-            # left on conveyors by previous runs cannot prematurely fire the
-            # downstream robot before the current XARM drop has been made.
-            with self._ir_lock:
-                self.ir_ready_flags.clear()
-            self.get_logger().info("🧹 IR flags cleared for new trajectory")
-
             # All XARM tasks (1 or more) go through parallel_xarms so they all
             # use COMMAND_COMPLETE:XARMx for completion — never the bare ACK+
             # task_complete path, which times out because lite6 doesn't send ACK.

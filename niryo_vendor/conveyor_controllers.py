@@ -28,6 +28,7 @@ Example:
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import yaml
 import time
@@ -207,6 +208,29 @@ class ConveyorController(Node):
                 f"   Direction: {self.current_direction}"
             )
     
+    def _call_service_blocking(self, client, request, timeout=2.0):
+        """
+        Call a ROS2 service synchronously from the monitoring thread without
+        touching the node's executor (avoids racing with the MultiThreadedExecutor).
+
+        The async future's done-callback sets a threading.Event; the monitoring
+        thread waits on that event instead of calling spin_until_future_complete.
+        """
+        done_event = threading.Event()
+        result_holder = [None]
+
+        def _done_cb(future):
+            try:
+                result_holder[0] = future.result()
+            except Exception:
+                pass
+            done_event.set()
+
+        future = client.call_async(request)
+        future.add_done_callback(_done_cb)
+        done_event.wait(timeout=timeout)
+        return result_holder[0]
+
     def setup_services(self):
         """Setup ROS2 service clients for hardware communication."""
         # Conveyor control service
@@ -326,13 +350,12 @@ class ConveyorController(Node):
             req.speed = self.config['speed']
             req.direction = sensor_config['direction']
             
-            future = self.conveyor_client.call_async(req)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
-            
-            if future.done():
+            result = self._call_service_blocking(self.conveyor_client, req, timeout=2.0)
+
+            if result is not None:
                 with self.state_lock:
                     self.conveyor_running = turn_on
-                
+
                 action = "started" if turn_on else "stopped"
                 self.get_logger().info(
                     f"🔄 Conveyor {self.conveyor_id}: {action} "
@@ -340,10 +363,10 @@ class ConveyorController(Node):
                     f"speed={self.config['speed']}, "
                     f"dir_value={sensor_config['direction']})"
                 )
-                
+
                 # Publish status update
                 self.publish_status()
-                
+
                 return True
             else:
                 self.get_logger().error(
@@ -375,31 +398,23 @@ class ConveyorController(Node):
             req = GetDigitalIO.Request()
             req.name = sensor_pin
 
-            future = self.ir_client.call_async(req)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+            result = self._call_service_blocking(self.ir_client, req, timeout=1.0)
 
-            if future.done():
-                result = future.result()
-                if result:
-                    # Niryo sensor: False = object detected, True = no object
-                    raw_value = result.value
-                    object_detected = not raw_value
+            if result is not None:
+                # Niryo sensor: False = object detected, True = no object
+                raw_value = result.value
+                object_detected = not raw_value
 
-                    self.get_logger().debug(
-                        f"✅ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
-                        f"raw_value={raw_value}, object_detected={object_detected}"
-                    )
+                self.get_logger().debug(
+                    f"✅ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
+                    f"raw_value={raw_value}, object_detected={object_detected}"
+                )
 
-                    return object_detected
-                else:
-                    self.get_logger().warn(
-                        f"⚠️ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
-                        f"service returned None result"
-                    )
+                return object_detected
             else:
                 self.get_logger().warn(
                     f"⚠️ Conveyor {self.conveyor_id}: Sensor {sensor_pin} - "
-                    f"service call timeout (not done)"
+                    f"service call timed out or returned None"
                 )
 
             return False
@@ -485,16 +500,18 @@ class ConveyorController(Node):
                     )
 
                     if current_ir_state:
-                        # Object detected - stop conveyor and trigger
+                        # Object detected — publish IR trigger immediately so the
+                        # robot command is not delayed by the motor stop service call,
+                        # then stop the conveyor (takes up to 2 s).
                         self.get_logger().info(
                             f"🛑 Conveyor {self.conveyor_id}: Object detected on "
                             f"{sensor_config['pin']} ({direction} direction)"
                         )
 
-                        if self.control_conveyor(False):
-                            self.send_ir_trigger(timestamp, sensor_config)
-                            last_heartbeat_time = timestamp
-                        else:
+                        self.send_ir_trigger(timestamp, sensor_config)
+                        last_heartbeat_time = timestamp
+
+                        if not self.control_conveyor(False):
                             self.get_logger().error(
                                 f"❌ Conveyor {self.conveyor_id}: Failed to stop"
                             )
@@ -811,7 +828,9 @@ def main(args=None):
             f"♻️ Entering main spin loop..."
         )
 
-        rclpy.spin(controller)
+        executor = MultiThreadedExecutor()
+        executor.add_node(controller)
+        executor.spin()
         
     except KeyboardInterrupt:
         controller.get_logger().info(

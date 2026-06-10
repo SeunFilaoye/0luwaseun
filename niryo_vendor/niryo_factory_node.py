@@ -19,6 +19,8 @@ Date: 2026-01-13
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from std_msgs.msg import String
 import threading
 import time
@@ -63,10 +65,21 @@ class NiryoFactoryNode(Node):
         for robot_id in self.robot_ids:
             self.robot_status[f'robot_{robot_id}'] = 'UNKNOWN'
 
+        # Per-robot idle events — set when the robot publishes IDLE.
+        # Per-robot processor threads wait on these instead of polling robot_status.
+        self.robot_idle_events = {}
+        for robot_id in self.robot_ids:
+            self.robot_idle_events[f'robot_{robot_id}'] = threading.Event()
+
         # Track acknowledgments
         self.robot_acks = {}
         for robot_id in self.robot_ids:
             self.robot_acks[f'robot_{robot_id}'] = None
+
+        # Callback groups — allow status/ack/IR callbacks to run concurrently,
+        # while commands are still processed one at a time.
+        self.concurrent_group = ReentrantCallbackGroup()
+        self.command_group = MutuallyExclusiveCallbackGroup()
 
         # Fault containment
         self.acl = FaultRegistry("niryo")
@@ -151,34 +164,42 @@ class NiryoFactoryNode(Node):
             )
 
         # Acknowledgment subscribers (robots → factory)
+        # ReentrantCallbackGroup: all 6 ack callbacks can run concurrently.
         for robot_id in self.robot_ids:
             ack_topic = f'/robot_{robot_id}/ack'
             self.create_subscription(
                 String, ack_topic,
                 lambda msg, rid=robot_id: self._on_ack_received(f'robot_{rid}', msg),
-                10
+                10,
+                callback_group=self.concurrent_group
             )
 
         # Status subscribers (robots → factory)
+        # ReentrantCallbackGroup: all 6 status callbacks can run concurrently.
         for robot_id in self.robot_ids:
             status_topic = f'/robot_{robot_id}/status'
             self.create_subscription(
                 String, status_topic,
                 lambda msg, rid=robot_id: self._on_status_received(f'robot_{rid}', msg),
-                10
+                10,
+                callback_group=self.concurrent_group
             )
 
         # High-level command subscriber (external → factory)
+        # MutuallyExclusiveCallbackGroup: commands processed one at a time.
         self.create_subscription(String, '/niryo_factory/command',
-                                self._on_high_level_command, 10)
+                                self._on_high_level_command, 10,
+                                callback_group=self.command_group)
 
         # IR trigger subscribers (conveyors → factory)
+        # ReentrantCallbackGroup: IR events from different conveyors can run concurrently.
         for cid in self.conveyor_ids:
             topic = f'/niryo_factory/conveyor_{cid}/ir_trigger'
             self.create_subscription(
                 String, topic,
                 lambda msg, conveyor_id=cid: self._on_ir_trigger(conveyor_id, msg),
-                10
+                10,
+                callback_group=self.concurrent_group
             )
 
         # Global status publisher (factory → external)
@@ -226,6 +247,10 @@ class NiryoFactoryNode(Node):
         status = msg.data
         self.robot_status[robot_id] = status
         self.get_logger().info(f"📊 [{robot_id}] STATUS: {status}")
+
+        # Wake any thread waiting in _wait_for_robot_done for this robot.
+        if status == 'IDLE' and robot_id in self.robot_idle_events:
+            self.robot_idle_events[robot_id].set()
 
         # If Robot 6 reports READY (picked from AGV), notify superfactory
         if robot_id == 'robot_6' and status.strip().upper() == 'READY':
@@ -397,6 +422,7 @@ class NiryoFactoryNode(Node):
 
                 robot_id = f'robot_{robot_num}'
                 if robot_num in self.robot_ids:
+                    self.robot_idle_events[robot_id].clear()
                     self._send_command_to_robot(robot_id, 'INITIALIZE')
                     self._wait_for_robot_done(robot_id)
                 else:
@@ -418,9 +444,10 @@ class NiryoFactoryNode(Node):
         self.get_logger().info("🔧 Initializing all robots...")
         self._publish_global_status("INITIALIZING_ALL")
 
-        # Send initialize command to all robots
+        # Clear idle events and send initialize command to all robots
         for robot_id in self.robot_ids:
             robot_key = f'robot_{robot_id}'
+            self.robot_idle_events[robot_key].clear()
             self._send_command_to_robot(robot_key, 'INITIALIZE')
 
         # Wait for all to complete
@@ -514,9 +541,10 @@ class NiryoFactoryNode(Node):
     def _run_robot_command(self, robot_id: str, robot_id_str: str, command: str):
         """Execute a pick/place command on a single robot and publish per-robot completion."""
         try:
-            # Reset any stale DONE status so _wait_for_robot_done doesn't return
-            # immediately from a previous command's completion.
             self.robot_status[robot_id] = 'EXECUTING'
+            # Clear event BEFORE sending so a stale IDLE from a previous command
+            # cannot cause _wait_for_robot_done to return immediately.
+            self.robot_idle_events[robot_id].clear()
             self._send_command_to_robot(robot_id, command)
             self._wait_for_robot_done(robot_id)
             self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
@@ -526,6 +554,8 @@ class NiryoFactoryNode(Node):
     def _run_r6_command(self, robot_id: str, robot_id_str: str, pickup_str: str, drop_str: str):
         """Execute R6 AGV pick sequence and publish per-robot completion."""
         try:
+            self.robot_status[robot_id] = 'EXECUTING'
+            self.robot_idle_events[robot_id].clear()
             if self._execute_robot6_agv_pick_sequence(pickup_str, drop_str):
                 self._wait_for_robot_done(robot_id)
                 self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
@@ -635,41 +665,24 @@ class NiryoFactoryNode(Node):
 
         self.get_logger().info(f"📤 Sent to {robot_id}: {command}")
 
-        # Wait a moment for acknowledgment
-        time.sleep(0.1)
-
     def _wait_for_robot_done(self, robot_id: str, timeout: float = 120.0):
         """
         Wait for robot to return to IDLE after finishing its command.
 
-        Waiting for IDLE (rather than DONE) avoids a race where the next command
-        is sent while the robot is still in the DONE→IDLE transition and would
-        therefore drop it (task_command_callback ignores commands when not IDLE).
-        _run_robot_command resets robot_status to 'EXECUTING' before sending each
-        command, so a stale IDLE from a previous task cannot cause a false early
-        return here.
+        Blocks on a threading.Event that is set by _on_status_received the instant
+        the robot publishes IDLE — no polling, zero extra latency.
+        The caller must clear robot_idle_events[robot_id] BEFORE sending the
+        command so a stale IDLE from a previous task cannot cause an early return.
 
         Args:
             robot_id: Robot identifier
             timeout: Maximum time to wait in seconds
         """
         self.get_logger().info(f"⏳ Waiting for {robot_id} to become IDLE...")
-
-        start_time = time.time()
-
-        while True:
-            # Wait until robot reports back IDLE (ready for next command)
-            if self.robot_status.get(robot_id) == 'IDLE':
-                self.get_logger().info(f"✅ {robot_id} is IDLE and ready")
-                break
-
-            # Check timeout
-            if time.time() - start_time > timeout:
-                self.get_logger().error(f"⏱️ Timeout waiting for {robot_id}")
-                break
-
-            # Sleep briefly
-            time.sleep(0.1)
+        if self.robot_idle_events[robot_id].wait(timeout=timeout):
+            self.get_logger().info(f"✅ {robot_id} is IDLE and ready")
+        else:
+            self.get_logger().error(f"⏱️ Timeout waiting for {robot_id}")
 
     def _publish_global_status(self, status: str):
         """Publish global factory status."""
@@ -695,8 +708,9 @@ def main(args=None):
     factory = NiryoFactoryNode()
 
     try:
-        # Spin the node
-        rclpy.spin(factory)
+        executor = MultiThreadedExecutor()
+        executor.add_node(factory)
+        executor.spin()
     except KeyboardInterrupt:
         factory.get_logger().info("🛑 Shutting down factory node...")
     finally:
