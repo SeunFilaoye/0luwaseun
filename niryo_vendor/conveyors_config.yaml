@@ -9,7 +9,7 @@ conveyor_1:
 
   sensors:
     forward:
-      pin: "DI3"
+      pin: "DI5"
       direction: 1
       triggers_robot: 1
       pickup_position: "P11"
@@ -23,7 +23,7 @@ conveyor_2:
 
   sensors:
     forward:
-      pin: "DI5"
+      pin: "DI3"
       direction: 1
       triggers_robot: 1
       pickup_position: "P12"

@@ -86,9 +86,12 @@ class SuperFactoryNode(Node):
                 'command_topic': '/agv_factory2/command',
                 'ack_topic': '/agv_factory2/ack',
                 'status_topic': '/agv_factory2/status'
+            },
+            'conveyor': {
+                'command_topic': '/conveyor_factory/command',
+                'ack_topic': '/conveyor_factory/ack',
+                'status_topic': '/conveyor_factory/status'
             }
-            # Add more vendors here as needed:
-            # 'kuka': {...},
         }
 
         # Tracks which AGV fleet most recently received a load signal so that
@@ -884,36 +887,8 @@ class SuperFactoryNode(Node):
         if vendor == 'niryo':
             ready_key = self._get_ir_ready_key_from_command(command)
             if ready_key:
-                self.get_logger().info(f"⏳ Waiting for IR_READY: {ready_key}...")
-                with self._ir_lock:
-                    if ready_key not in self.ir_ready_events:
-                        self.ir_ready_events[ready_key] = threading.Event()
-                    already_fired = ready_key in self.ir_ready_flags
-                    if already_fired:
-                        self.ir_ready_flags.discard(ready_key)
-                        self.ir_ready_events[ready_key].clear()
-                    else:
-                        self.ir_ready_events[ready_key].clear()
-
-                if already_fired:
-                    self.get_logger().info(f"✅ IR already triggered for {ready_key}, proceeding")
-                else:
-                    # Wait outside the lock so _handle_ir_ready can acquire it
-                    # to set the event.
-                    fired = self.ir_ready_events[ready_key].wait(timeout=complete_timeout)
-                    with self._ir_lock:
-                        if ready_key in self.ir_ready_flags:
-                            self.ir_ready_flags.discard(ready_key)
-                            self.ir_ready_events[ready_key].clear()
-                        elif not fired:
-                            self.get_logger().error(f"❌ IR readiness timeout for {ready_key}")
-                            return False
-                        else:
-                            # fired=True but flag already consumed by a concurrent
-                            # task (shouldn't happen in practice, but safe to proceed).
-                            self.get_logger().warn(
-                                f"⚠️ IR event fired for {ready_key} but flag already consumed — proceeding"
-                            )
+                if not self._wait_for_ir(ready_key, timeout=complete_timeout):
+                    return False
 
         # Step 1 + 2: Send command and wait for completion.
         # Niryo R-robot commands use a per-robot lock so that two parallel
@@ -979,6 +954,42 @@ class SuperFactoryNode(Node):
                 self.get_logger().error(f"❌ Task completion timeout from {vendor}")
                 return False
 
+        return True
+
+    def _wait_for_ir(self, ir_key: str, timeout: float) -> bool:
+        """
+        Block until the conveyor IR sensor at ir_key fires, then consume the flag
+        and send IR_CONSUMED so the conveyor stops its heartbeat.
+
+        Returns True if IR was received, False on timeout.
+        """
+        self.get_logger().info(f"⏳ Waiting for IR_READY: {ir_key}...")
+        with self._ir_lock:
+            if ir_key not in self.ir_ready_events:
+                self.ir_ready_events[ir_key] = threading.Event()
+            already = ir_key in self.ir_ready_flags
+            if already:
+                self.ir_ready_flags.discard(ir_key)
+            self.ir_ready_events[ir_key].clear()
+
+        if already:
+            self.get_logger().info(f"✅ IR already triggered for {ir_key}, proceeding")
+            self._notify_ir_consumed(ir_key)
+            return True
+
+        fired = self.ir_ready_events[ir_key].wait(timeout=timeout)
+        with self._ir_lock:
+            if ir_key in self.ir_ready_flags:
+                self.ir_ready_flags.discard(ir_key)
+                self.ir_ready_events[ir_key].clear()
+                self._notify_ir_consumed(ir_key)
+            elif not fired:
+                self.get_logger().error(f"❌ IR readiness timeout for {ir_key}")
+                return False
+            else:
+                self.get_logger().warn(
+                    f"⚠️ IR event fired for {ir_key} but flag already consumed — proceeding"
+                )
         return True
 
     def _get_ir_ready_key_from_command(self, command: str):
@@ -1107,7 +1118,15 @@ class SuperFactoryNode(Node):
             vendor: Vendor name
         """
         status_msg = msg.data
-        self.get_logger().info(f"📊 Status from {vendor}: {status_msg}")
+        # Suppress repeated AGV heartbeats once the gate is already set
+        _is_agv_heartbeat = (
+            status_msg.strip() == 'AGV_READY_AT_A' and (
+                (vendor == 'agv' and self._agv_at_a.is_set()) or
+                (vendor == 'agv2' and self._agv2_at_a.is_set())
+            )
+        )
+        if not _is_agv_heartbeat:
+            self.get_logger().info(f"📊 Status from {vendor}: {status_msg}")
 
         # Per-robot completion for niryo parallel routes (COMMAND_COMPLETE:R1)
         if vendor == 'niryo' and 'COMMAND_COMPLETE:' in status_msg.upper():
@@ -1135,11 +1154,13 @@ class SuperFactoryNode(Node):
         # AGV readiness at loading position A
         if status_msg.strip() == 'AGV_READY_AT_A':
             if vendor == 'agv':
-                self._agv_at_a.set()
-                self.get_logger().info("✅ AGV1 fleet: IDLE AGV at A confirmed")
+                if not self._agv_at_a.is_set():
+                    self._agv_at_a.set()
+                    self.get_logger().info("✅ AGV1 fleet: IDLE AGV at A confirmed")
             elif vendor == 'agv2':
-                self._agv2_at_a.set()
-                self.get_logger().info("✅ AGV2 fleet: IDLE AGV at A confirmed")
+                if not self._agv2_at_a.is_set():
+                    self._agv2_at_a.set()
+                    self.get_logger().info("✅ AGV2 fleet: IDLE AGV at A confirmed")
 
         # Handle AGV arrival events
         if vendor == 'agv' and status_msg.upper().startswith('AGV_ARRIVED'):
@@ -1147,8 +1168,8 @@ class SuperFactoryNode(Node):
         elif vendor == 'agv2' and status_msg.upper().startswith('AGV_ARRIVED'):
             self._handle_agv2_arrival(status_msg)
 
-        # Handle IR readiness events from Niryo factory
-        if vendor == 'niryo' and status_msg.upper().startswith('IR_READY'):
+        # Handle IR readiness events from Conveyor factory
+        if vendor == 'conveyor' and status_msg.upper().startswith('IR_READY'):
             self._handle_ir_ready(status_msg)
 
         # Route READY messages to AGV factory for coordination
@@ -1185,6 +1206,19 @@ class SuperFactoryNode(Node):
             self.ir_ready_events[key].set()
 
         self.get_logger().info(f"✅ IR ready for {key}")
+
+    def _notify_ir_consumed(self, position_key: str):
+        """
+        Tell conveyor_factory that the IR flag for this position has been
+        consumed by a route chain, so the conveyor can stop heartbeating.
+        Fire-and-forget — no ACK wait needed.
+        """
+        command = f"IR_CONSUMED | {position_key}"
+        self.get_logger().info(f"📤 IR_CONSUMED → conveyor_factory: {position_key}")
+        if 'conveyor' in self.command_publishers:
+            msg = String()
+            msg.data = command
+            self.command_publishers['conveyor'].publish(msg)
 
     def _handle_agv_arrival(self, status_msg: str):
         """
@@ -1264,10 +1298,6 @@ class SuperFactoryNode(Node):
             self.get_logger().warn("Niryo factory not configured, cannot dispatch R4")
             return
 
-        # Position D: 2-step route — R4 picks from AGV (P12), drops onto
-        # Conveyor 6 (D16), then picks again from C6 pickup (P16) and drops
-        # to Red Bin (D12).  Runs in a background thread so the callback
-        # returns immediately and the IR-gating wait doesn't block the executor.
         if position == 'D':
             threading.Thread(
                 target=self._dispatch_agv2_r4_two_step,
@@ -1362,28 +1392,8 @@ class SuperFactoryNode(Node):
         self._send_vendor_command('agv2', 'READY_TO_RETURN')
         self.get_logger().info("📤 AGV2 dispatch: sent READY_TO_RETURN to agv2 factory")
 
-        # Wait for conveyor IR at next_pickup (same pattern as _execute_task)
-        self.get_logger().info(f"⏳ AGV2 dispatch: waiting for IR {ir_key}...")
-        with self._ir_lock:
-            if ir_key not in self.ir_ready_events:
-                self.ir_ready_events[ir_key] = threading.Event()
-            already = ir_key in self.ir_ready_flags
-            if already:
-                self.ir_ready_flags.discard(ir_key)
-                self.ir_ready_events[ir_key].clear()
-            else:
-                self.ir_ready_events[ir_key].clear()
-
-        if not already:
-            fired = self.ir_ready_events[ir_key].wait(timeout=timeout)
-            with self._ir_lock:
-                if ir_key in self.ir_ready_flags:
-                    self.ir_ready_flags.discard(ir_key)
-                    self.ir_ready_events[ir_key].clear()
-                elif not fired:
-                    self.get_logger().error(f"❌ AGV2 dispatch: IR timeout for {ir_key}")
-                    return
-
+        if not self._wait_for_ir(ir_key, timeout=timeout):
+            return
         self.get_logger().info(f"✅ AGV2 dispatch: IR {ir_key} received")
 
         # Step 2: R4 picks from conveyor, drops to final destination

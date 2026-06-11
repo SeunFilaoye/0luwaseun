@@ -458,8 +458,12 @@ class NiryoRobotController(BaseRobot):
                     self.set_state(self.STATE_ERROR, f"Failed to retreat to {pregrip_pos}")
                     return False
 
-            # Step 5: Object secured, proceed directly to drop
+            # Step 5: Object secured — move through hold (intermediate) position
             self.set_state(self.STATE_HOLDING, "Object secured")
+            if 'hold_joints' in self.config:
+                if not self.move_to_position('hold_joints'):
+                    self.set_state(self.STATE_ERROR, "Failed to move to hold position")
+                    return False
 
             # Step 6: Move to drop position
             self.set_state(self.STATE_MOVING_TO_DROP, f"Moving to {drop_pos}")

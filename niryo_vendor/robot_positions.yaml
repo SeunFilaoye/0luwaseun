@@ -78,7 +78,7 @@ robot_3:
     description: Home position for Robot 3
     type: HOME
   hold_joints:
-    joints: [-2.066, -0.3096, -1.9051, 0.0476, -1.0662, -0.1732]
+    joints: [0.576, 0.388, -0.674, -0.007, -1.161, 0.029]
     description: Hold position after pickup
     type: HOLD
   P14:

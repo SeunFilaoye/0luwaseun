@@ -191,16 +191,8 @@ class NiryoFactoryNode(Node):
                                 self._on_high_level_command, 10,
                                 callback_group=self.command_group)
 
-        # IR trigger subscribers (conveyors → factory)
-        # ReentrantCallbackGroup: IR events from different conveyors can run concurrently.
-        for cid in self.conveyor_ids:
-            topic = f'/niryo_factory/conveyor_{cid}/ir_trigger'
-            self.create_subscription(
-                String, topic,
-                lambda msg, conveyor_id=cid: self._on_ir_trigger(conveyor_id, msg),
-                10,
-                callback_group=self.concurrent_group
-            )
+        # IR trigger subscriptions removed — conveyor_factory_node now owns
+        # IR relay to superfactory. niryo_factory only handles robots.
 
         # Global status publisher (factory → external)
         self.global_status_pub = self.create_publisher(String, '/niryo_factory/status', 10)
@@ -332,35 +324,6 @@ class NiryoFactoryNode(Node):
         # Plain string — treat as unknown sender
         return ('UNKNOWN', raw, None)
 
-    def _on_ir_trigger(self, conveyor_id: int, msg):
-        """
-        Handle IR trigger events from conveyors and notify superfactory.
-
-        Expected JSON:
-        {
-            'conveyor_id': int,
-            'timestamp': float,
-            'direction': str,
-            'triggers_robot': int | list,
-            'pickup_position': str
-        }
-        """
-        try:
-            data = json.loads(msg.data)
-            triggers_robot = data.get('triggers_robot')
-            pickup_position = data.get('pickup_position', 'UNKNOWN')
-
-            robot_ids = []
-            if isinstance(triggers_robot, list):
-                robot_ids = triggers_robot
-            elif isinstance(triggers_robot, int):
-                robot_ids = [triggers_robot]
-
-            for rid in robot_ids:
-                status = f"IR_READY | R{rid} | {pickup_position} | C{conveyor_id}"
-                self._publish_global_status(status)
-        except Exception as e:
-            self.get_logger().error(f"❌ Failed to parse IR trigger: {e}")
 
     # ==================== COMMAND PROCESSING ====================
 

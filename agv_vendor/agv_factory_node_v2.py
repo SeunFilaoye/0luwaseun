@@ -104,6 +104,10 @@ class AGVFactoryNode(Node):
             target=self._command_processor, daemon=True)
         self.command_processor_thread.start()
 
+        # Heartbeat: re-publish AGV_READY_AT_A every 5 s while an AGV is idle
+        # at position A so a late-joining superfactory catches the state quickly.
+        self.create_timer(5.0, self._heartbeat_agv_ready)
+
         self.get_logger().info("=" * 60)
         self.get_logger().info("AGV FACTORY NODE READY")
         self.get_logger().info("=" * 60)
@@ -1125,6 +1129,19 @@ class AGVFactoryNode(Node):
                 break
 
             time.sleep(0.1)
+
+    def _heartbeat_agv_ready(self):
+        """
+        Periodic timer callback (5 s). Re-publishes AGV_READY_AT_A while an
+        AGV is idle at position A so a late-joining superfactory catches the
+        current state without waiting for the next physical state change.
+        Publishes silently (no log) to avoid flooding the terminal.
+        """
+        front = self.queue_positions[0]  # 'A'
+        if self._find_agv_at_position(front) is not None:
+            msg = String()
+            msg.data = 'AGV_READY_AT_A'
+            self.global_status_pub.publish(msg)
 
     def _publish_global_status(self, status: str):
         """Publish global factory status."""
