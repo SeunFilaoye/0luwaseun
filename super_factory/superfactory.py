@@ -820,7 +820,7 @@ class SuperFactoryNode(Node):
                             f"({agv_vendor}) before dispatching pick..."
                         )
                     confirmed = ready_evt.wait(timeout=60.0)
-                    # Consume the token — the AGV will leave A once xArm drops onto it
+                    # Consume the token — next XARM drop must wait for fresh AGV_READY_AT_A
                     ready_evt.clear()
                     if confirmed:
                         self.get_logger().info(

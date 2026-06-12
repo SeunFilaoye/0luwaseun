@@ -95,9 +95,9 @@ conveyor_7:
     forward:
       pin: "DI1"
       direction: 1
-      triggers_robot: [5, 6]
+      triggers_robot: 5
       pickup_position: "P17"
-      description: "Normal flow to R5 or R6"
+      description: "Normal flow to R5"
 
 conveyor_8:
   robot_namespace: "robot6"        # ← FIXED: C8 is on R6's panel
