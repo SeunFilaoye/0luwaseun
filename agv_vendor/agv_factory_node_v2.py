@@ -151,14 +151,13 @@ class AGVFactoryNode(Node):
 
     def _use_default_config(self):
         """Use default configuration if config file is missing."""
-        self.agv_ids = [1, 2, 3]
+        self.agv_ids = [1, 2]
         self.agv_config = {
             'agv_1': {'name': 'Alvik1', 'start_position': 'A'},
             'agv_2': {'name': 'Alvik2', 'start_position': 'B'},
-            'agv_3': {'name': 'Alvik3', 'start_position': 'C'}
         }
         self.stations = {}
-        self.queue_positions = ['A', 'B', 'C']
+        self.queue_positions = ['A', 'B']
         self.destinations = ['D', 'E']
         self.get_logger().warn(f"   Using default AGV IDs: {self.agv_ids}")
 
@@ -265,7 +264,7 @@ class AGVFactoryNode(Node):
                     # slot it vacated is physically clear and any free slot ahead should be
                     # filled without waiting for the next pick-place command.
                     prev = self._last_logged_state.get(agv_id)
-                    if prev in ('ADVANCING', 'RETURNING'):
+                    if prev in ('ADVANCING', 'RETURNING', 'MOVING'):
                         self._trigger_cascade_advance(position)
 
                     # Notify superfactory the moment an IDLE AGV reaches the loading
@@ -533,29 +532,58 @@ class AGVFactoryNode(Node):
         Called in a background thread when the service AGV departs from A.
         Only advances B→A. C→B is triggered by cascade once B is physically vacated
         (i.e., when the B→A AGV confirms IDLE at A via _trigger_cascade_advance).
+        Retries the advance command if the AGV does not confirm IDLE @ A within
+        ADVANCE_CONFIRM_TIMEOUT seconds (handles micro-ROS WiFi message loss).
         """
+        ADVANCE_CONFIRM_TIMEOUT = 45.0  # seconds to wait for confirmation
+        ADVANCE_RETRY_DELAY = 5.0       # seconds between retries
+
         # Brief pause so the departing AGV clears position A's sticker zone
         time.sleep(2.0)
 
         def _slot_occupied(pos: str) -> bool:
-            return bool(self._claimed_positions.get(pos)) or (
-                self._find_agv_at_position(pos) is not None
-            )
+            # Only check claims here — the service AGV just departed so its
+            # position field still shows A while in MOVING state, which would
+            # falsely block the B→A advance if we checked _find_agv_at_position.
+            return bool(self._claimed_positions.get(pos))
 
         # B → A only — never send C→B here, because B isn't physically free yet.
-        if not _slot_occupied('A'):
-            agv_at_b = self._find_agv_at_position('B')
-            if agv_at_b:
-                self.get_logger().info(f"Queue advance: {agv_at_b} B → A")
-                self._claimed_positions['A'] = agv_at_b
-                self._send_command_to_agv(agv_at_b, 'advance_to a')
-                # C→B fires automatically when agv_at_b confirms IDLE @ A (cascade)
-            else:
-                self.get_logger().info("Queue advance: no IDLE AGV at B to advance")
-        else:
+        if _slot_occupied('A'):
             self.get_logger().info(
                 f"Queue advance: A occupied/claimed ({self._claimed_positions.get('A', 'IDLE')}), skipping B→A"
             )
+            return
+
+        agv_at_b = self._find_agv_at_position('B')
+        if not agv_at_b:
+            self.get_logger().info("Queue advance: no IDLE AGV at B to advance")
+            return
+
+        self.get_logger().info(f"Queue advance: {agv_at_b} B → A")
+        self._claimed_positions['A'] = agv_at_b
+        self._send_command_to_agv(agv_at_b, 'advance_to a')
+
+        # Wait for confirmation with periodic retries (handles WiFi packet loss)
+        deadline = time.time() + ADVANCE_CONFIRM_TIMEOUT
+        confirmed = False
+        while time.time() < deadline:
+            time.sleep(ADVANCE_RETRY_DELAY)
+            if self._find_agv_at_position('A') is not None:
+                confirmed = True
+                break
+            # Still not confirmed — resend in case message was lost
+            if time.time() < deadline:
+                self.get_logger().warn(
+                    f"⚠️ {agv_at_b} has not confirmed IDLE @ A — retrying advance_to a"
+                )
+                self._send_command_to_agv(agv_at_b, 'advance_to a')
+
+        if not confirmed:
+            self.get_logger().error(
+                f"❌ {agv_at_b} failed to reach A within {ADVANCE_CONFIRM_TIMEOUT}s "
+                f"— releasing claim. Check Alvik WiFi/micro-ROS connection."
+            )
+            self._claimed_positions.pop('A', None)
 
     def _trigger_cascade_advance(self, filled_position: str):
         """

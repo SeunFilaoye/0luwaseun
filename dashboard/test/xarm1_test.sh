@@ -32,7 +32,7 @@ TRAJ4="XARM1 | PICKUP - ASRS C1 R4 | DROP - CONVEYOR 1\n---\nR1 | PICKUP - P11 |
 
 TRAJ5="XARM1 | PICKUP - ASRS C1 R5 | DROP - CONVEYOR 2\n---\nR1 | PICKUP - P12 | DROP - D15\nR2 | PICKUP - P15 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13"
 
-TRAJ6="XARM1 | PICKUP - ASRS C1 R6 | DROP - AGV2 A\n---\nAGV4 | PICKUP - A | DROP - D"
+TRAJ6="XARM1 | PICKUP - ASRS C1 R6 | DROP - CONVEYOR 2\n---\nR1 | PICKUP - P12 | DROP - D15\nR2 | PICKUP - P15 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13"
 
 LABELS=(
   ""
@@ -45,6 +45,8 @@ LABELS=(
 )
 
 TRAJS=("" "$TRAJ1" "$TRAJ2" "$TRAJ3" "$TRAJ4" "$TRAJ5" "$TRAJ6")
+
+#TRAJS=("" "$TRAJ1" "$TRAJ2" "$TRAJ4" "$TRAJ5")
 
 echo "════════════════════════════════════════════════════════"
 echo "  XARM1 TEST — 6 routes, C1 rows 1-6"

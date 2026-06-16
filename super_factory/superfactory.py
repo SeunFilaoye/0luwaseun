@@ -94,10 +94,6 @@ class SuperFactoryNode(Node):
             }
         }
 
-        # Tracks which AGV fleet most recently received a load signal so that
-        # the Niryo READY_TO_RETURN can be routed to the correct fleet.
-        self._last_loaded_agv_vendor = 'agv'
-
         # Synchronization for ASRS and algorithm responses
         self.asrs_response_received = threading.Event()
         self.algorithm_response_received = threading.Event()
@@ -151,10 +147,12 @@ class SuperFactoryNode(Node):
         self._agv_part_loaded = 0   # vendor 1 (AGV1)
         self._agv2_part_loaded = 0  # vendor 2 (AGV2)
 
-        # True while R5 is unloading the AGV at node E (vendor 1).
-        # Prevents a concurrent spurious R6 READY from triggering READY_TO_RETURN
-        # before R5 has finished picking.
-        self._agv1_r5_unload_in_progress = False
+        # AGV arrival gates — mirrors the IR-ready pattern.
+        # Key: agv vendor ('agv' or 'agv2').  Set when AGV_ARRIVED is received.
+        # Cleared and waited on by the Niryo unload task in _execute_task.
+        self._agv_arrived_flags: set = set()
+        self._agv_arrived_events: dict = {}
+        self._agv_arrived_lock = threading.Lock()
 
         # Fault containment
         self.acl = FaultRegistry("superfactory")
@@ -327,10 +325,14 @@ class SuperFactoryNode(Node):
         self.get_logger().info("🔧 PROCESSING ORDER BATCH")
         self.get_logger().info("=" * 70)
 
-        # Reset AGV part-loaded counters so stale tickets from a previous batch
-        # cannot cause ghost Niryo dispatches in this batch.
+        # Reset AGV part-loaded counters and arrival gates so stale signals
+        # from a previous batch cannot affect this batch.
         self._agv_part_loaded = 0
         self._agv2_part_loaded = 0
+        with self._agv_arrived_lock:
+            self._agv_arrived_flags.clear()
+            for evt in self._agv_arrived_events.values():
+                evt.clear()
 
         # Clear stale IR flags from previous batches or runs.
         # A flag that was never consumed (e.g. from an aborted session or a
@@ -748,11 +750,36 @@ class SuperFactoryNode(Node):
         threads = []
 
         def run_chain(idx, tasks):
+            # Tag any Niryo task that immediately follows an AGV task so that:
+            #   1. It waits for AGV_ARRIVED before executing (like IR gating)
+            #   2. After it completes, READY_TO_RETURN is sent to the AGV fleet
+            for i, task in enumerate(tasks):
+                if task['vendor'] in ('agv', 'agv2') and i + 1 < len(tasks):
+                    next_task = tasks[i + 1]
+                    if next_task['vendor'] == 'niryo':
+                        next_task['agv_unload_vendor'] = task['vendor']
+
             success = True
             for task in tasks:
                 if not success:
                     break
+                # If this is a Niryo unload from AGV, wait for AGV to arrive
+                # before sending the pick command — same concept as IR gating.
+                if task.get('agv_unload_vendor'):
+                    agv_vendor = task['agv_unload_vendor']
+                    if not self._wait_for_agv_arrived(agv_vendor, timeout=180.0):
+                        success = False
+                        self.get_logger().error(
+                            f"❌ Route chain {idx}: AGV arrival timeout ({agv_vendor})"
+                        )
+                        break
                 ok = self._execute_task(task)
+                if ok and task.get('agv_unload_vendor'):
+                    agv_vendor = task['agv_unload_vendor']
+                    self.get_logger().info(
+                        f"📤 Niryo unload complete — sending READY_TO_RETURN to {agv_vendor}"
+                    )
+                    self._send_vendor_command(agv_vendor, 'READY_TO_RETURN')
                 if not ok:
                     success = False
                     self.get_logger().error(
@@ -881,10 +908,12 @@ class SuperFactoryNode(Node):
         command = task['command']
 
         # If this is a Niryo pickup from conveyor, wait for IR readiness.
+        # Skip for AGV unload tasks — the AGV arrival gate in run_chain already
+        # confirmed the part is physically present before this task was called.
         # The lock makes the "check flag → clear event" sequence atomic with
         # _handle_ir_ready's "add flag → set event" so we can never clear an
         # event that was set between our flag-check and our event.clear().
-        if vendor == 'niryo':
+        if vendor == 'niryo' and not task.get('agv_unload_vendor'):
             ready_key = self._get_ir_ready_key_from_command(command)
             if ready_key:
                 if not self._wait_for_ir(ready_key, timeout=complete_timeout):
@@ -921,11 +950,9 @@ class SuperFactoryNode(Node):
             # wait() is called is not erased by a late clear().
             #
             # AGV pick-place route commands (e.g. "AGV1 | PICKUP - A | DROP - D")
-            # are fire-and-forget from this layer: the full AGV lifecycle is
-            # managed by the READY_TO_MOVE → AGV_ARRIVED → READY_TO_RETURN
-            # callback chain.  Two concurrent AGV route chains racing on the
-            # shared task_complete event would always cause one to time out.
-            # ACK alone confirms the factory accepted the route.
+            # are fire-and-forget: the AGV factory manages its own lifecycle.
+            # Two concurrent AGV route chains racing on the shared task_complete
+            # event would cause one to time out, so ACK alone is used here.
             is_agv_pickup_route = (
                 vendor in ('agv', 'agv2')
                 and 'PICKUP' in command.upper()
@@ -1162,15 +1189,13 @@ class SuperFactoryNode(Node):
                     self._agv2_at_a.set()
                     self.get_logger().info("✅ AGV2 fleet: IDLE AGV at A confirmed")
 
-        # Handle AGV arrival events
-        if vendor == 'agv' and status_msg.upper().startswith('AGV_ARRIVED'):
-            self._handle_agv_arrival(status_msg)
-        elif vendor == 'agv2' and status_msg.upper().startswith('AGV_ARRIVED'):
-            self._handle_agv2_arrival(status_msg)
-
         # Handle IR readiness events from Conveyor factory
         if vendor == 'conveyor' and status_msg.upper().startswith('IR_READY'):
             self._handle_ir_ready(status_msg)
+
+        # Handle AGV arrival at destination — gates the Niryo unload task
+        if status_msg.upper().startswith('AGV_ARRIVED'):
+            self._handle_agv_arrived(vendor, status_msg)
 
         # Route READY messages to AGV factory for coordination
         # Lite6 (Xarm) sends READY when part is loaded onto AGV (READY_XARM1/2)
@@ -1207,6 +1232,54 @@ class SuperFactoryNode(Node):
 
         self.get_logger().info(f"✅ IR ready for {key}")
 
+    def _handle_agv_arrived(self, vendor: str, status_msg: str):
+        """
+        Handle AGV_ARRIVED from agv/agv2 factory.
+        Sets a flag+event keyed by vendor so the waiting Niryo unload task
+        can proceed — mirrors the IR-ready pattern exactly.
+        Expected format: "AGV_ARRIVED | agv_1 | Alvik1 | D"
+        """
+        parts = [p.strip() for p in status_msg.split('|')]
+        if len(parts) < 4:
+            self.get_logger().warn(f"⚠️ Invalid AGV_ARRIVED: {status_msg}")
+            return
+        hw_name  = parts[2]
+        position = parts[3].upper()
+        self.get_logger().info(f"✅ {hw_name} arrived at {position} ({vendor})")
+        with self._agv_arrived_lock:
+            self._agv_arrived_flags.add(vendor)
+            if vendor not in self._agv_arrived_events:
+                self._agv_arrived_events[vendor] = threading.Event()
+            self._agv_arrived_events[vendor].set()
+
+    def _wait_for_agv_arrived(self, agv_vendor: str, timeout: float) -> bool:
+        """
+        Block until the AGV fleet has arrived at its destination, then consume
+        the flag — mirrors _wait_for_ir exactly.
+        """
+        self.get_logger().info(f"⏳ Waiting for AGV_ARRIVED: {agv_vendor}...")
+        with self._agv_arrived_lock:
+            if agv_vendor not in self._agv_arrived_events:
+                self._agv_arrived_events[agv_vendor] = threading.Event()
+            already = agv_vendor in self._agv_arrived_flags
+            if already:
+                self._agv_arrived_flags.discard(agv_vendor)
+            self._agv_arrived_events[agv_vendor].clear()
+
+        if already:
+            self.get_logger().info(f"✅ AGV already arrived ({agv_vendor}), proceeding")
+            return True
+
+        fired = self._agv_arrived_events[agv_vendor].wait(timeout=timeout)
+        with self._agv_arrived_lock:
+            if agv_vendor in self._agv_arrived_flags:
+                self._agv_arrived_flags.discard(agv_vendor)
+                self._agv_arrived_events[agv_vendor].clear()
+            elif not fired:
+                self.get_logger().error(f"❌ AGV arrival timeout ({agv_vendor})")
+                return False
+        return True
+
     def _notify_ir_consumed(self, position_key: str):
         """
         Tell conveyor_factory that the IR flag for this position has been
@@ -1220,278 +1293,46 @@ class SuperFactoryNode(Node):
             msg.data = command
             self.command_publishers['conveyor'].publish(msg)
 
-    def _handle_agv_arrival(self, status_msg: str):
-        """
-        Handle AGV arrival status and dispatch Niryo task.
-
-        Expected format:
-        "AGV_ARRIVED | agv_1 | Alvik1 | D"
-        """
-        if self._agv_part_loaded <= 0:
-            self.get_logger().warn(
-                "⚠️ AGV arrived but no part was loaded (upstream pick failed) — "
-                "suppressing Niryo dispatch to prevent ghost move"
-            )
-            return
-        self._agv_part_loaded -= 1  # consume one ticket
-
-        parts = [p.strip() for p in status_msg.split('|')]
-        if len(parts) < 4:
-            self.get_logger().warn(f"⚠️ Invalid AGV_ARRIVED status: {status_msg}")
-            return
-
-        agv_id = parts[1]
-        hw_name = parts[2]
-        position = parts[3].upper()
-
-        self.get_logger().info(f"✅ {hw_name} is at {position} (from {agv_id})")
-
-        if 'niryo' not in self.command_publishers:
-            self.get_logger().warn("Niryo factory not configured, cannot dispatch niryo robot")
-            return
-
-        # Node D → R6 picks from P12 (blue bin D11)
-        # Node E → R5 picks from P13 (blue bin D11); R6 cannot physically reach node E
-        if position == 'D':
-            niryo_command = "R6 | PICKUP - P12 | DROP - D11"
-            self._send_vendor_command('niryo', niryo_command)
-            self.get_logger().info(f"📤 Sent to niryo: {niryo_command}")
-        elif position == 'E':
-            # Run in background: wait for R5 COMMAND_COMPLETE before sending
-            # READY_TO_RETURN.  A bare _send_vendor_command here would let a
-            # concurrent spurious R6 READY (from any conveyor route) fire
-            # READY_TO_RETURN before R5 has finished unloading the AGV.
-            self._agv1_r5_unload_in_progress = True
-            threading.Thread(
-                target=self._dispatch_agv1_r5_node_e,
-                daemon=True
-            ).start()
-        else:
-            self.get_logger().warn(f"Unsupported AGV destination: {position}")
-            return
-
-    def _handle_agv2_arrival(self, status_msg: str):
-        """
-        Handle AGV Vendor 2 arrival and dispatch Niryo R4 to pick from node D/E.
-
-        Expected format: "AGV_ARRIVED | agv_4 | Alvik4 | D"
-        """
-        if self._agv2_part_loaded <= 0:
-            self.get_logger().warn(
-                "⚠️ AGV2 arrived but no part was loaded (upstream pick failed) — "
-                "suppressing R4 dispatch to prevent ghost move"
-            )
-            return
-        self._agv2_part_loaded -= 1  # consume one ticket
-
-        parts = [p.strip() for p in status_msg.split('|')]
-        if len(parts) < 4:
-            self.get_logger().warn(f"⚠️ Invalid AGV_ARRIVED status: {status_msg}")
-            return
-
-        hw_name  = parts[2]
-        position = parts[3].upper()
-
-        self.get_logger().info(f"✅ {hw_name} (vendor 2) is at {position}")
-
-        if 'niryo' not in self.command_publishers:
-            self.get_logger().warn("Niryo factory not configured, cannot dispatch R4")
-            return
-
-        if position == 'D':
-            threading.Thread(
-                target=self._dispatch_agv2_r4_two_step,
-                args=('P12', 'D16', 'P16', 'D12'),
-                daemon=True
-            ).start()
-        elif position == 'E':
-            niryo_command = "R4 | PICKUP - P13 | DROP - D12"
-            self._send_vendor_command('niryo', niryo_command)
-            self.get_logger().info(f"📤 Sent to niryo (AGV2 arrival): {niryo_command}")
-        else:
-            self.get_logger().warn(f"Unsupported AGV2 destination: {position}")
-
-    def _dispatch_agv1_r5_node_e(self):
-        """
-        Background thread: send R5 to pick from the AGV at node E (vendor 1),
-        then — and only then — send READY_TO_RETURN so the AGV is not recalled
-        while R5 is still unloading it.
-
-        Mirrors the _dispatch_agv2_r4_two_step pattern for vendor 2.
-        """
-        robot_id = 'R5'
-        niryo_command = "R5 | PICKUP - P13 | DROP - D11"
-        timeout = 120.0
-
-        with self._robot_locks_guard:
-            if robot_id not in self.robot_locks:
-                self.robot_locks[robot_id] = threading.Lock()
-        robot_lock = self.robot_locks[robot_id]
-
-        with robot_lock:
-            if robot_id not in self.robot_completion_events:
-                self.robot_completion_events[robot_id] = threading.Event()
-            self.robot_completion_events[robot_id].clear()
-            self._send_vendor_command('niryo', niryo_command)
-            self.get_logger().info(f"📤 AGV1 node-E dispatch: sent {niryo_command}")
-            self.get_logger().info(f"⏳ AGV1 node-E dispatch: waiting for {robot_id} to complete...")
-            ok = self.robot_completion_events[robot_id].wait(timeout=timeout)
-
-        self._agv1_r5_unload_in_progress = False
-
-        if not ok:
-            self.get_logger().error(
-                f"❌ AGV1 node-E dispatch: {robot_id} completion timeout after {timeout}s"
-            )
-            return
-
-        self.get_logger().info(f"✅ AGV1 node-E dispatch: {robot_id} complete — sending READY_TO_RETURN")
-        self._send_vendor_command('agv', 'READY_TO_RETURN')
-
-    def _dispatch_agv2_r4_two_step(self, pickup: str, intermediate: str,
-                                    next_pickup: str, final_drop: str):
-        """
-        Background thread: dispatch R4 for a two-step pick-place when AGV2
-        arrives at node D.
-
-        Step 1 — pick from AGV (pickup) → drop onto Conveyor 6 (intermediate).
-        Step 2 — wait for C6 IR sensor at next_pickup, then drop to final_drop.
-
-        Uses the same per-robot lock and completion-event infrastructure as
-        _execute_task so this is serialised with any concurrent route chain
-        that also uses R4.
-        """
-        robot_id = 'R4'
-        ir_key   = next_pickup   # position-only, matches _handle_ir_ready key format
-        timeout  = 120.0
-
-        with self._robot_locks_guard:
-            if robot_id not in self.robot_locks:
-                self.robot_locks[robot_id] = threading.Lock()
-        robot_lock = self.robot_locks[robot_id]
-
-        # Step 1: R4 picks from AGV, places on conveyor
-        with robot_lock:
-            if robot_id not in self.robot_completion_events:
-                self.robot_completion_events[robot_id] = threading.Event()
-            self.robot_completion_events[robot_id].clear()
-            self._send_vendor_command(
-                'niryo', f"{robot_id} | PICKUP - {pickup} | DROP - {intermediate}"
-            )
-            self.get_logger().info(f"⏳ AGV2 dispatch: waiting for {robot_id} step 1...")
-            ok = self.robot_completion_events[robot_id].wait(timeout=timeout)
-
-        if not ok:
-            self.get_logger().error(f"❌ AGV2 dispatch: {robot_id} step 1 timeout")
-            return
-        self.get_logger().info(f"✅ AGV2 dispatch: {robot_id} step 1 complete ({pickup}→{intermediate})")
-
-        # R4 has unloaded the AGV — signal it to return to queue.
-        # niryo_factory only publishes READY for R6 (AGV1 routes), never for R4,
-        # so _route_ready_to_agv is not triggered; we send directly.
-        self._send_vendor_command('agv2', 'READY_TO_RETURN')
-        self.get_logger().info("📤 AGV2 dispatch: sent READY_TO_RETURN to agv2 factory")
-
-        if not self._wait_for_ir(ir_key, timeout=timeout):
-            return
-        self.get_logger().info(f"✅ AGV2 dispatch: IR {ir_key} received")
-
-        # Step 2: R4 picks from conveyor, drops to final destination
-        with robot_lock:
-            self.robot_completion_events[robot_id].clear()
-            self._send_vendor_command(
-                'niryo', f"{robot_id} | PICKUP - {next_pickup} | DROP - {final_drop}"
-            )
-            self.get_logger().info(f"⏳ AGV2 dispatch: waiting for {robot_id} step 2...")
-            ok = self.robot_completion_events[robot_id].wait(timeout=timeout)
-
-        if not ok:
-            self.get_logger().error(f"❌ AGV2 dispatch: {robot_id} step 2 timeout")
-            return
-        self.get_logger().info(
-            f"✅ AGV2 dispatch complete: {pickup}→{intermediate}→{next_pickup}→{final_drop}"
-        )
-
     def _route_ready_to_agv(self, source_vendor: str, status_msg: str):
         """
-        Route READY signals from robot factories to AGV factory.
-
-        This enables coordination between robots:
-        - Lite6 (Xarm) sends READY after loading part onto AGV → AGV can move to destination
-        - Niryo (Ned2) sends READY after picking part from AGV → AGV can return to queue
-
-        Args:
-            source_vendor: Vendor that sent the READY signal ('lite6' or 'niryo')
-            status_msg: Original status message
+        Route READY signals from lite6 to AGV factory (READY_TO_MOVE).
+        Called when an xArm finishes dropping a part onto an AGV platform.
         """
-        # Determine the type of READY signal and which AGV fleet to target
-        if source_vendor == 'lite6':
-            # Only route to AGV if the arm actually dropped onto an AGV.
-            # When the arm drops to a conveyor the READY signal is published
-            # too, but it must NOT trigger the AGV to move.
-            arm_id = 'XARM1' if 'XARM1' in status_msg.upper() else 'XARM2'
-            last_cmd = self._pending_xarm_commands.get(arm_id, '')
-            drop_part = ''
-            if '|' in last_cmd:
-                segments = last_cmd.split('|')
-                if len(segments) >= 3:
-                    drop_part = segments[2].upper()
-
-            if 'AGV' not in drop_part:
-                self.get_logger().info(
-                    f"⏭️ READY from {arm_id} — drop was CONVEYOR, not routing to AGV"
-                )
-                return
-
-            # XARM1 drops onto vendor 2 AGV; XARM2 drops onto vendor 1 AGV
-            agv_vendor = 'agv2' if arm_id == 'XARM1' else 'agv'
-            self._last_loaded_agv_vendor = agv_vendor
-            ready_command = 'READY_TO_MOVE'
-            # Increment the in-flight ticket count so the arrival handler knows
-            # a real part is en route.  Each concurrent AGV route adds its own
-            # ticket; each arrival consumes one.
-            if agv_vendor == 'agv2':
-                self._agv2_part_loaded += 1
-            else:
-                self._agv_part_loaded += 1
-            self.get_logger().info(
-                f"🔄 Routing READY from {status_msg.strip()} → {agv_vendor} can move to destination"
-            )
-
-        elif source_vendor == 'niryo':
-            # Niryo READY is published only by R6 via _run_r6_command, which is only
-            # ever auto-dispatched by _handle_agv_arrival (vendor-1 AGV routes).
-            # Vendor-2 AGV routes use R4 and send READY_TO_RETURN directly from
-            # _dispatch_agv2_r4_two_step — they never reach here.
-            # Always route to 'agv' (vendor 1); do NOT use _last_loaded_agv_vendor,
-            # which can be overwritten by a concurrent batch before R6 finishes.
-            #
-            # Guard: while R5 is unloading the AGV at node E, suppress any R6 READY
-            # that arrives (e.g. from a concurrent conveyor-only route).  R6 READY
-            # signals from unrelated routes would prematurely recall the AGV before
-            # R5 has finished picking.  _dispatch_agv1_r5_node_e clears this flag
-            # and sends READY_TO_RETURN itself once R5 completes.
-            if self._agv1_r5_unload_in_progress:
-                self.get_logger().info(
-                    "⏭️ READY from R6 suppressed — R5 is still unloading AGV at node E"
-                )
-                return
-            agv_vendor = 'agv'
-            ready_command = 'READY_TO_RETURN'
-            self.get_logger().info(
-                "🔄 Routing READY from R6 → agv (vendor 1) can return to queue"
-            )
-
-        else:
+        if source_vendor != 'lite6':
             self.get_logger().debug(f"Ignoring READY from {source_vendor} (not routed to AGV)")
             return
 
-        if agv_vendor not in self.command_publishers:
-            self.get_logger().warn(f"AGV factory '{agv_vendor}' not configured, cannot route READY signal")
+        # Only route when the arm actually dropped onto an AGV, not a conveyor.
+        arm_id = 'XARM1' if 'XARM1' in status_msg.upper() else 'XARM2'
+        last_cmd = self._pending_xarm_commands.get(arm_id, '')
+        drop_part = ''
+        if '|' in last_cmd:
+            segments = last_cmd.split('|')
+            if len(segments) >= 3:
+                drop_part = segments[2].upper()
+
+        if 'AGV' not in drop_part:
+            self.get_logger().info(
+                f"⏭️ READY from {arm_id} — drop was CONVEYOR, not routing to AGV"
+            )
             return
 
-        self._send_vendor_command(agv_vendor, ready_command)
-        self.get_logger().info(f"📤 Sent {ready_command} to {agv_vendor} factory")
+        # XARM1 drops onto vendor 2 AGV; XARM2 drops onto vendor 1 AGV
+        agv_vendor = 'agv2' if arm_id == 'XARM1' else 'agv'
+        if agv_vendor == 'agv2':
+            self._agv2_part_loaded += 1
+        else:
+            self._agv_part_loaded += 1
+
+        if agv_vendor not in self.command_publishers:
+            self.get_logger().warn(f"AGV factory '{agv_vendor}' not configured")
+            return
+
+        self.get_logger().info(
+            f"🔄 Routing READY from {status_msg.strip()} → {agv_vendor} READY_TO_MOVE"
+        )
+        self._send_vendor_command(agv_vendor, 'READY_TO_MOVE')
+        self.get_logger().info(f"📤 Sent READY_TO_MOVE to {agv_vendor} factory")
 
     # ==================== STATE AND STATUS ====================
 

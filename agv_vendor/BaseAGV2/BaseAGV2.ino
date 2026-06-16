@@ -83,7 +83,7 @@ Arduino_Alvik alvik;
 
 // =================== Line Following Params ==========
 const int   TAPE_MIN      = 100;
-const float BASE_SPEED    = 35.0f;
+const float BASE_SPEED    = 50.0f;
 const float TURN_SPEED    = 60.0f;
 const float REVERSE_TURN  = -12.0f;
 const float KP            = 0.03f;
@@ -108,7 +108,7 @@ Position target_queue_position = POS_UNKNOWN;  // NEW: For advancing/returning
 
 
 // =================== Waypoint / Color Detection =====
-const int COLOR_STABLE_COUNT = 5;
+// Stable sample counts are now per-colour (RED_STABLE_SAMPLES etc.) — no single global count.
 const unsigned long COLOR_COOLDOWN_MS = 1000;
 int color_hit_count = 0;
 unsigned long last_color_detection_time = 0;
@@ -136,11 +136,13 @@ float start_yaw_deg = 0.0f;
 // =================== Robust Waypoint Thresholds =====
 const int   LINE_TAPE_THRESH = 250;
 
+// Per-colour stable sample requirements (yellow needs more — most false-positive prone)
+const int RED_STABLE_SAMPLES    = 4;
+const int YELLOW_STABLE_SAMPLES = 6;
+const int BLUE_STABLE_SAMPLES   = 5;
 
-const float S_MIN_STICKER = 0.60f;
-const float V_MIN_STICKER = 0.08f;
-const float V_MAX_STICKER = 0.30f;
-
+// Tracks the colour type of the current stability count so mixed samples don't accumulate
+static char last_marker_color[8] = "NONE";
 
 const float START_S_MIN = 0.45f;
 const float START_V_MIN = 0.05f;
@@ -170,14 +172,23 @@ const unsigned long MAX_TURN_MS = 1800;
 
 
 // =================== Robot ID =======================
+// int getAlvikID() {
+//   String mac = WiFi.macAddress();
+//   mac.toUpperCase();
+//   if (mac == "3C:84:27:C3:EA:EC") return 1;   // Alvik1
+//   if (mac == "3C:84:27:C2:BC:40") return 2;   // Alvik2
+//   return 3;
+// }
+
+
+// =================== Robot ID =======================
 int getAlvikID() {
   String mac = WiFi.macAddress();
   mac.toUpperCase();
-  if (mac == "3C:84:27:C3:EA:EC") return 1;   // Alvik1
-  if (mac == "3C:84:27:C2:BC:40") return 2;   // Alvik2
+  if (mac == "3C:84:27:C3:EB:54") return 1;   // Alvik1
+  if (mac == "74:4D:BD:A2:1B:70") return 2;   // Alvik2
   return 3;
 }
-
 
 // =================== Utility ========================
 static inline float clampf(float x, float lo, float hi) {
@@ -244,67 +255,94 @@ void setLEDState(RobotState state) {
 
 
 // =================== HSV + Waypoint Helpers =========
-static inline bool hueInRed(float h) {
-  return (h >= 340.0f || h <= 20.0f);
+
+// --- Colour classifiers (ported from simple_agv.ino) ---
+
+static inline bool isRed(float h, float s, float v) {
+  return (h > 340.0f || h < 20.0f) && s > 0.40f && v > 0.04f;
 }
 
-
-static inline bool hueInBlue(float h) {
-  return (h >= 190.0f && h <= 240.0f);
+static inline float colorChroma(float nr, float ng, float nb) {
+  float mx = nr; if (ng > mx) mx = ng; if (nb > mx) mx = nb;
+  float mn = nr; if (ng < mn) mn = ng; if (nb < mn) mn = nb;
+  return mx - mn;
 }
 
+static inline bool isYellow(float h, float s, float v,
+                             float nr, float ng, float nb,
+                             int left, int center, int right) {
+  float chroma = colorChroma(nr, ng, nb);
+  bool tape_now = (left > LINE_TAPE_THRESH || center > LINE_TAPE_THRESH || right > LINE_TAPE_THRESH);
+
+  // Reject false-yellow from bright black tape
+  if (tape_now && h > 65.0f && h < 95.0f && s < 0.25f && v < 0.30f && chroma < 0.05f)
+    return false;
+
+  return (h > 25.0f && h < 50.0f) && s > 0.60f && v > 0.08f && chroma > 0.075f;
+}
+
+static inline bool isBlue(float h, float s, float v) {
+  return h > 190.0f && h < 260.0f && s > 0.60f && v > 0.05f;
+}
 
 bool onTapeOrEdge() {
   alvik.get_line_sensors(L, C, R);
   return (L > LINE_TAPE_THRESH) || (C > LINE_TAPE_THRESH) || (R > LINE_TAPE_THRESH);
 }
 
-
-void readHSV(float &h, float &s, float &v) {
-  alvik.get_color(h, s, v, HSV);
-}
-
-
-bool hsvStickerConfident(float s, float v) {
-  return (s >= S_MIN_STICKER) && (v >= V_MIN_STICKER) && (v <= V_MAX_STICKER);
-}
-
-
+// Returns WP_RED, WP_BLUE, or WP_NONE.
+// Uses per-colour stable sample counts and a mixed-colour reset guard.
 WaypointColor detectWaypointColor() {
-  float h, s, v;
-  readHSV(h, s, v);
-
-
   alvik.get_line_sensors(L, C, R);
-  if ((L < OFF_TAPE_THRESH) || (C < OFF_TAPE_THRESH) || (R < OFF_TAPE_THRESH)) {
+  if ((L < OFF_TAPE_THRESH) || (C < OFF_TAPE_THRESH) || (R < OFF_TAPE_THRESH))
     return WP_NONE;
+
+  float h, s, v, nr, ng, nb;
+  alvik.get_color(h, s, v, HSV);
+  alvik.get_color(nr, ng, nb, RGB);
+
+  const char* detected = nullptr;
+  if (isRed(h, s, v))              detected = "RED";
+  else if (isBlue(h, s, v))        detected = "BLUE";
+  else if (isYellow(h, s, v, nr, ng, nb, L, C, R)) detected = "YELLOW";
+
+  // Reset stability count when colour type changes
+  const char* key = detected ? detected : "NONE";
+  if (strcmp(key, last_marker_color) != 0) {
+    color_hit_count = 0;
+    strncpy(last_marker_color, key, sizeof(last_marker_color) - 1);
   }
 
+  if (!detected) return WP_NONE;
 
-  if (!hsvStickerConfident(s, v)) return WP_NONE;
+  color_hit_count++;
 
+  int needed = (strcmp(detected, "YELLOW") == 0) ? YELLOW_STABLE_SAMPLES
+             : (strcmp(detected, "BLUE")   == 0) ? BLUE_STABLE_SAMPLES
+             :                                     RED_STABLE_SAMPLES;
 
-  if (hueInRed(h))  return WP_RED;
-  if (hueInBlue(h)) return WP_BLUE;
-
-
+  if (color_hit_count >= needed) {
+    color_hit_count = 0;
+    if (strcmp(detected, "RED")  == 0) return WP_RED;
+    if (strcmp(detected, "BLUE") == 0) return WP_BLUE;
+    // YELLOW stickers are not used as waypoints in this fleet — treat as NONE
+  }
   return WP_NONE;
 }
 
 
 String detectColorLabelForTelemetry() {
-  float h, s, v;
-  readHSV(h, s, v);
-
+  float h, s, v, nr, ng, nb;
+  alvik.get_color(h, s, v, HSV);
+  alvik.get_color(nr, ng, nb, RGB);
 
   if (v < 0.07f) return "black";
   if (v < 0.35f && s < 0.25f) return "grey";
   if (s < 0.15f && v > 0.70f) return "white";
 
-
-  if (hueInRed(h) && hsvStickerConfident(s, v)) return "red";
-  if (hueInBlue(h) && hsvStickerConfident(s, v)) return "blue";
-
+  if (isRed(h, s, v))   return "red";
+  if (isBlue(h, s, v))  return "blue";
+  if (isYellow(h, s, v, nr, ng, nb, L, C, R)) return "yellow";
 
   char buf[48];
   snprintf(buf, sizeof(buf), "h%.0f_s%.2f_v%.2f", h, s, v);
@@ -330,11 +368,10 @@ void processStartConfirmation() {
 
 
   float h, s, v;
-  readHSV(h, s, v);
-
+  alvik.get_color(h, s, v, HSV);
 
   bool looks_like_blue_start =
-      hueInBlue(h) &&
+      isBlue(h, s, v) &&
       (s >= START_S_MIN) &&
       (v >= START_V_MIN) &&
       (v <= START_V_MAX);
@@ -407,14 +444,10 @@ void followStep() {
       WaypointColor wp = detectWaypointColor();
 
 
-      // DELIVERY: Count red stickers for D/E destinations
+      // DELIVERY: detectWaypointColor() returns WP_RED only after stable confirmation
       if (robot_state == STATE_MOVING) {
         if (wp == WP_RED) {
-          color_hit_count++;
-          if (color_hit_count >= COLOR_STABLE_COUNT) {
             red_count++;
-            color_hit_count = 0;
-
 
             bool reached = false;
             if (target_destination == POS_D && red_count == 1) {
@@ -425,14 +458,12 @@ void followStep() {
               current_position = POS_E;
             }
 
-
             if (reached) {
               stopRobot();
               robot_state = STATE_ARRIVED;
               setLEDState(STATE_ARRIVED);
               last_color_detection_time = millis();
 
-
               forced_turn_active = false;
               lost_all_start_ms = 0;
               return;
@@ -440,94 +471,72 @@ void followStep() {
               clearing_sticker = true;
               clear_start_time = millis();
             }
-          }
-        } else {
-          color_hit_count = 0;
         }
       }
-      // RETURNING: Count blue stickers for queue positions C, B, A
+      // RETURNING: detectWaypointColor() returns WP_BLUE only after stable confirmation
       else if (robot_state == STATE_RETURNING) {
         if (wp == WP_BLUE) {
-          color_hit_count++;
-          if (color_hit_count >= COLOR_STABLE_COUNT) {
-            blue_count++;
-            color_hit_count = 0;
+          blue_count++;
 
+          bool should_stop = false;
+          Position detected_pos = POS_UNKNOWN;
 
-            bool should_stop = false;
-            Position detected_pos = POS_UNKNOWN;
-
-
-            if (blue_count == 1) {
-              detected_pos = POS_C;
-              if (target_queue_position == POS_C || target_queue_position == POS_UNKNOWN) should_stop = true;
-            } else if (blue_count == 2) {
-              detected_pos = POS_B;
-              if (target_queue_position == POS_B) should_stop = true;
-            } else if (blue_count == 3) {
-              detected_pos = POS_A;
-              if (target_queue_position == POS_A) should_stop = true;
-            }
-
-
-            if (should_stop) {
-              stopRobot();
-              current_position = detected_pos;
-              robot_state = STATE_IDLE;
-              setLEDState(STATE_IDLE);
-              last_color_detection_time = millis();
-              blue_count = 0;
-
-
-              forced_turn_active = false;
-              lost_all_start_ms = 0;
-              return;
-            } else {
-              clearing_sticker = true;
-              clear_start_time = millis();
-            }
+          if (blue_count == 1) {
+            detected_pos = POS_C;
+            if (target_queue_position == POS_C || target_queue_position == POS_UNKNOWN) should_stop = true;
+          } else if (blue_count == 2) {
+            detected_pos = POS_B;
+            if (target_queue_position == POS_B) should_stop = true;
+          } else if (blue_count == 3) {
+            detected_pos = POS_A;
+            if (target_queue_position == POS_A) should_stop = true;
           }
-        } else {
-          color_hit_count = 0;
+
+          if (should_stop) {
+            stopRobot();
+            current_position = detected_pos;
+            robot_state = STATE_IDLE;
+            setLEDState(STATE_IDLE);
+            last_color_detection_time = millis();
+            blue_count = 0;
+
+            forced_turn_active = false;
+            lost_all_start_ms = 0;
+            return;
+          } else {
+            clearing_sticker = true;
+            clear_start_time = millis();
+          }
         }
       }
-      // ADVANCING: Count blue stickers for queue advancement
+      // ADVANCING: detectWaypointColor() returns WP_BLUE only after stable confirmation
       else if (robot_state == STATE_ADVANCING) {
         if (wp == WP_BLUE) {
-          color_hit_count++;
-          if (color_hit_count >= COLOR_STABLE_COUNT) {
-            blue_count++;
-            color_hit_count = 0;
+          blue_count++;
 
-
-            bool reached_target = false;
-            if (target_queue_position == POS_A && blue_count == 1) {
-              reached_target = true;
-              current_position = POS_A;
-            } else if (target_queue_position == POS_B && blue_count == 1) {
-              reached_target = true;
-              current_position = POS_B;
-            }
-
-
-            if (reached_target) {
-              stopRobot();
-              robot_state = STATE_IDLE;
-              setLEDState(STATE_IDLE);
-              last_color_detection_time = millis();
-              blue_count = 0;
-
-
-              forced_turn_active = false;
-              lost_all_start_ms = 0;
-              return;
-            } else {
-              clearing_sticker = true;
-              clear_start_time = millis();
-            }
+          bool reached_target = false;
+          if (target_queue_position == POS_A && blue_count == 1) {
+            reached_target = true;
+            current_position = POS_A;
+          } else if (target_queue_position == POS_B && blue_count == 1) {
+            reached_target = true;
+            current_position = POS_B;
           }
-        } else {
-          color_hit_count = 0;
+
+          if (reached_target) {
+            stopRobot();
+            robot_state = STATE_IDLE;
+            setLEDState(STATE_IDLE);
+            last_color_detection_time = millis();
+            blue_count = 0;
+
+            forced_turn_active = false;
+            lost_all_start_ms = 0;
+            return;
+          } else {
+            clearing_sticker = true;
+            clear_start_time = millis();
+          }
         }
       }
     }
@@ -796,12 +805,13 @@ void cmd_callback(const void *msgin) {
         target_queue_position = POS_A;
         robot_state = STATE_ADVANCING;
         setLEDState(STATE_ADVANCING);
-       
+
         blue_count = 0;
         last_color_detection_time = 0;
         color_hit_count = 0;
-        clearing_sticker = false;
-       
+        clearing_sticker = true;
+        clear_start_time = millis();
+
         forced_turn_active = false;
         lost_all_start_ms = 0;
         lost_start_ms = 0;
@@ -811,12 +821,13 @@ void cmd_callback(const void *msgin) {
         target_queue_position = POS_B;
         robot_state = STATE_ADVANCING;
         setLEDState(STATE_ADVANCING);
-       
+
         blue_count = 0;
         last_color_detection_time = 0;
         color_hit_count = 0;
-        clearing_sticker = false;
-       
+        clearing_sticker = true;
+        clear_start_time = millis();
+
         forced_turn_active = false;
         lost_all_start_ms = 0;
         lost_start_ms = 0;
@@ -969,7 +980,7 @@ void publish_status(unsigned long now) {
 void setup() {
   alvik.begin();
   stopRobot();
-
+  alvik.set_illuminator(true);
 
   int id = getAlvikID();
   snprintf(ROBOT_NAME, sizeof(ROBOT_NAME), "Alvik%d", id);
@@ -984,6 +995,8 @@ void setup() {
 
 
   init_transport();
+
+  Serial.print("MAC: "); Serial.println(WiFi.macAddress());
 
 
   if (!init_graph()) {

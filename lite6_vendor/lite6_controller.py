@@ -486,6 +486,8 @@ class Lite6RobotNode(Node):
             approach_info = self.base.get_tcp_position(approach_key)
             target_pose = self.base.get_asrs_pose(column, row)
 
+            self.get_logger().info(f"TARGET POSE for C{column}R{row}: {target_pose}")
+
             if not approach_info or not target_pose:
                 self.get_logger().error(
                     f"❌ Missing ASRS pose data for C{column}R{row} or {approach_key}")

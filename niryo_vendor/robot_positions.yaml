@@ -115,7 +115,7 @@ robot_4:
     description: Home position for Robot 4
     type: HOME
   hold_joints:
-    joints: [-0.7525, -0.1232, -0.5885, 0.0737, -0.9158, -0.9954]
+    joints: [1.175, -0.113, -0.129, -0.025, -1.201, -1.243]
     description: Hold position after pickup
     type: HOLD
   P15:

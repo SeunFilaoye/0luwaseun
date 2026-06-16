@@ -244,9 +244,6 @@ class NiryoFactoryNode(Node):
         if status == 'IDLE' and robot_id in self.robot_idle_events:
             self.robot_idle_events[robot_id].set()
 
-        # If Robot 6 reports READY (picked from AGV), notify superfactory
-        if robot_id == 'robot_6' and status.strip().upper() == 'READY':
-            self._publish_global_status("READY")
 
     def _on_high_level_command(self, msg):
         """
@@ -450,14 +447,7 @@ class NiryoFactoryNode(Node):
         self.get_logger().info(f"🎯 Dispatching {robot_id_str} in background thread")
         self._publish_global_status(f"{robot_id.upper()}_EXECUTING")
 
-        if robot_id == 'robot_6':
-            t = threading.Thread(
-                target=self._run_r6_command,
-                args=(robot_id, robot_id_str, pickup_str, drop_str),
-                daemon=True
-            )
-        else:
-            t = threading.Thread(
+        t = threading.Thread(
                 target=self._run_robot_command,
                 args=(robot_id, robot_id_str, command),
                 daemon=True
@@ -487,12 +477,7 @@ class NiryoFactoryNode(Node):
 
                 parts = [p.strip() for p in command.split('|')]
 
-                if robot_id_key == 'robot_6':
-                    pickup_str = parts[1].strip() if len(parts) > 1 else ''
-                    drop_str = parts[2].strip() if len(parts) > 2 else ''
-                    self._run_r6_command(robot_id_key, robot_id_str, pickup_str, drop_str)
-                else:
-                    self._run_robot_command(robot_id_key, robot_id_str, command)
+                self._run_robot_command(robot_id_key, robot_id_str, command)
 
                 self.robot_command_queues[robot_id_key].task_done()
 
@@ -513,48 +498,6 @@ class NiryoFactoryNode(Node):
             self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
         except Exception as e:
             self.get_logger().error(f"❌ {robot_id_str} command failed: {e}")
-
-    def _run_r6_command(self, robot_id: str, robot_id_str: str, pickup_str: str, drop_str: str):
-        """Execute R6 AGV pick sequence and publish per-robot completion."""
-        try:
-            self.robot_status[robot_id] = 'EXECUTING'
-            self.robot_idle_events[robot_id].clear()
-            if self._execute_robot6_agv_pick_sequence(pickup_str, drop_str):
-                self._wait_for_robot_done(robot_id)
-                self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
-                # Notify superfactory that AGV can return
-                self._publish_global_status("READY")
-            else:
-                self.get_logger().error("❌ Failed to build R6 AGV pick sequence")
-                self._publish_global_status("COMMAND_FAILED")
-        except Exception as e:
-            self.get_logger().error(f"❌ R6 command failed: {e}")
-
-    def _execute_robot6_agv_pick_sequence(self, pickup_str: str, drop_str: str) -> bool:
-        """
-        Build and send a multi-line sequence for Robot 6 to pick from AGV.
-
-        Sequence:
-        home -> pregrip_P12 -> P12 -> vacuum on -> pregrip_P12
-        -> D12 -> vacuum off -> home
-        """
-        pickup = self._parse_location(pickup_str, is_pickup=True)
-        drop = self._parse_location(drop_str, is_pickup=False)
-
-        if not pickup or not drop:
-            return False
-
-        pregrip_pos = f"pregrip_{pickup}"
-
-        # Format: SEQUENCE | pos1 -> pos2 -> ... | VACUUM:pull@pos | VACUUM:push@pos
-        sequence_cmd = (
-            f"SEQUENCE | home_joints -> {pregrip_pos} -> {pickup} -> {pregrip_pos} -> "
-            f"{drop} -> home_joints | VACUUM:pull@{pickup} | VACUUM:push@{drop}"
-        )
-
-        full_cmd = f"R6 | {sequence_cmd}"
-        self._send_command_to_robot('robot_6', full_cmd)
-        return True
 
     def _parse_robot_id(self, robot_id_str: str) -> str:
         """
