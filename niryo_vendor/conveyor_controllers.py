@@ -77,10 +77,6 @@ class ConveyorController(Node):
         self.conveyor_running = False
         self.shutdown_flag = False
 
-        # Heartbeat control — set to 0 to cancel, set to time.time() to arm.
-        # Written by ir_monitoring_loop, readable/clearable by control_command_callback.
-        self.heartbeat_time = 0.0
-        
         # Load configuration from YAML
         self.config = self.load_conveyor_configuration(conveyor_id, config_path)
         
@@ -454,14 +450,10 @@ class ConveyorController(Node):
         Monitors IR sensor at 50 Hz (20ms intervals) and handles:
         - Object detection (stop conveyor, send trigger)
         - Object removal (start conveyor)
-        - Heartbeat re-publish while part is waiting (so late-joining subscribers
-          such as niryo_factory don't permanently miss the trigger)
         """
         self.get_logger().info(
             f"🔍 Conveyor {self.conveyor_id}: Monitoring loop STARTED - thread is running"
         )
-
-        IR_HEARTBEAT_INTERVAL = 5.0   # re-publish every 5 s while part is waiting
 
         loop_count = 0
         while not self.shutdown_flag:
@@ -503,25 +495,23 @@ class ConveyorController(Node):
                     )
 
                     if current_ir_state:
-                        # Object detected — publish IR trigger immediately so the
-                        # robot command is not delayed by the motor stop service call,
-                        # then stop the conveyor (takes up to 2 s).
+                        # Object detected — stop conveyor first, then send IR trigger
+                        # so superfactory only gates the robot when the part is confirmed
+                        # stationary at the pickup position.
                         self.get_logger().info(
                             f"🛑 Conveyor {self.conveyor_id}: Object detected on "
                             f"{sensor_config['pin']} ({direction} direction)"
                         )
-
-                        self.send_ir_trigger(timestamp, sensor_config)
-                        self.heartbeat_time = timestamp
 
                         if not self.control_conveyor(False):
                             self.get_logger().error(
                                 f"❌ Conveyor {self.conveyor_id}: Failed to stop"
                             )
 
+                        self.send_ir_trigger(timestamp, sensor_config)
+
                     else:
-                        # Object removed - start conveyor and cancel heartbeat
-                        self.heartbeat_time = 0.0
+                        # Object removed - start conveyor
                         self.get_logger().info(
                             f"✅ Conveyor {self.conveyor_id}: Object removed from "
                             f"{sensor_config['pin']} ({direction} direction)"
@@ -535,19 +525,6 @@ class ConveyorController(Node):
                     # Update state
                     with self.state_lock:
                         self.last_ir_state = current_ir_state
-
-                elif current_ir_state and self.heartbeat_time > 0:
-                    # Part still present — periodically re-publish so any
-                    # late-joining subscriber (e.g. niryo_factory restarted)
-                    # receives the trigger without waiting for the next physical event.
-                    now = time.time()
-                    if now - self.heartbeat_time >= IR_HEARTBEAT_INTERVAL:
-                        self.get_logger().info(
-                            f"🔁 Conveyor {self.conveyor_id}: Heartbeat IR re-publish "
-                            f"(part still on {sensor_config['pin']})"
-                        )
-                        self.send_ir_trigger(now, sensor_config)
-                        self.heartbeat_time = now
 
                 # Fast polling - 50 Hz
                 time.sleep(0.02)
@@ -668,15 +645,6 @@ class ConveyorController(Node):
         
         if command == "START":
             self.control_conveyor(True)
-
-        elif command == "STOP_HEARTBEAT":
-            # Superfactory has consumed the IR flag — no need to keep re-publishing.
-            # The monitoring loop checks self.heartbeat_time; setting it to 0
-            # prevents the next heartbeat from firing.
-            self.heartbeat_time = 0.0
-            self.get_logger().info(
-                f"🔇 Conveyor {self.conveyor_id}: Heartbeat cancelled (IR flag consumed)"
-            )
 
         elif command == "STOP":
             self.control_conveyor(False)

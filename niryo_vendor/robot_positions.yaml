@@ -53,7 +53,7 @@ robot_2:
     description: Hold position after pickup
     type: HOLD
   P13:
-    joints: [0.7465,-0.9458,0.2173,-0.0183,-0.9342,-0.6027]
+    joints: [0.7313,-0.9367,0.2082,-0.0075,-0.8805,-1.1457]
     description: Pickup from Conveyor C3
     type: PICKUP
   P15:
@@ -61,7 +61,7 @@ robot_2:
     description: Pickup from Conveyor C50.6856,-0.4777,-0.6431,-0.6671,-0.2301,-1.1457
     type: PICKUP
   D17:
-    joints: [2.9,-0.261,-1.0324,0.5492,-0.1105,-0.6088]
+    joints: [2.9,-0.4534,-0.6431,0.3621,-0.5876,-1.1365]
     description: Drop to Conveyor C7
     type: DROP
   pregrip_P13:
@@ -168,11 +168,11 @@ robot_5:
     description: Pickup from Conveyor C6
     type: PICKUP
   P17:
-    joints: [0.3219,-0.361,-0.8021,0.0599,-0.5032,-1.7563]
+    joints: [0.264,-0.3822,-0.784,0.158,-0.5415,-1.8008]
     description: Pickup from Conveyor C7
     type: PICKUP
   P13:
-    joints: [0.9352, -0.9458, 0.1234, 0.02, -0.7885, -1.6964]
+    joints: [0.993,-0.9473,0.1128,0.0599,-0.7716,-1.7639]
     description: Pick from AGV E
     type: PICKUP
   #D11:
