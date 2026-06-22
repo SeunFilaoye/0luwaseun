@@ -495,20 +495,17 @@ class ConveyorController(Node):
                     )
 
                     if current_ir_state:
-                        # Object detected — stop conveyor first, then send IR trigger
-                        # so superfactory only gates the robot when the part is confirmed
-                        # stationary at the pickup position.
                         self.get_logger().info(
                             f"🛑 Conveyor {self.conveyor_id}: Object detected on "
                             f"{sensor_config['pin']} ({direction} direction)"
                         )
 
-                        if not self.control_conveyor(False):
+                        if self.control_conveyor(False):
+                            self.send_ir_trigger(timestamp, sensor_config)
+                        else:
                             self.get_logger().error(
-                                f"❌ Conveyor {self.conveyor_id}: Failed to stop"
+                                f"❌ Conveyor {self.conveyor_id}: Failed to stop — IR trigger suppressed"
                             )
-
-                        self.send_ir_trigger(timestamp, sensor_config)
 
                     else:
                         # Object removed - start conveyor

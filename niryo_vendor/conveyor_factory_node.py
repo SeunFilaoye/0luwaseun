@@ -4,20 +4,15 @@ Conveyor Factory Node - Logical vendor for all conveyors in the testbed.
 
 Sits between superfactory and the individual conveyor_controller processes.
 Responsibilities:
-  - Receive raw IR triggers from conveyor hardware nodes
+  - Receive raw IR triggers from conveyor hardware nodes (published only after
+    conveyor confirms stopped)
   - Publish IR_READY status up to superfactory
-  - Receive IR_CONSUMED | PN commands from superfactory
-  - Forward STOP_HEARTBEAT to the specific conveyor_controller
-  - Publish ACK back to superfactory
 
-Three-channel contract with superfactory:
-  command  : /conveyor_factory/command   (superfactory → this node)
-  ack      : /conveyor_factory/ack       (this node → superfactory)
+Two-channel contract with superfactory:
   status   : /conveyor_factory/status    (this node → superfactory)
 
 Internal topics (conveyor hardware nodes):
   /niryo_factory/conveyor_N/ir_trigger   (conveyor_controller → this node)
-  /niryo_factory/conveyor_N/control_cmd  (this node → conveyor_controller)
 """
 
 import rclpy
@@ -96,7 +91,7 @@ class ConveyorFactoryNode(Node):
         self.ack_pub = self.create_publisher(
             String, '/conveyor_factory/ack', 10)
 
-        # Command from superfactory: IR_CONSUMED | PN
+        # Command from superfactory (unexpected — log a warning)
         self.create_subscription(
             String, '/conveyor_factory/command',
             self._on_command,
@@ -160,48 +155,9 @@ class ConveyorFactoryNode(Node):
     # ==================== INBOUND: COMMAND FROM SUPERFACTORY ==============
 
     def _on_command(self, msg):
-        """
-        Receive command from superfactory.
-
-        Supported commands:
-          IR_CONSUMED | PN   — superfactory has claimed the IR flag for position PN;
-                               tell the conveyor to stop heartbeating.
-        """
+        """Receive command from superfactory."""
         command = msg.data.strip()
-        self.get_logger().info(f"📥 Command from superfactory: {command}")
-
-        if command.upper().startswith('IR_CONSUMED'):
-            parts = [p.strip() for p in command.split('|')]
-            if len(parts) < 2:
-                self.get_logger().error(f"❌ Malformed IR_CONSUMED command: {command}")
-                return
-
-            position = parts[1].strip().upper()
-            self._handle_ir_consumed(position)
-
-            # ACK back to superfactory
-            self._publish_ack(f"ACK:{command}")
-
-        else:
-            self.get_logger().warn(f"⚠️ Unknown command: {command}")
-
-    def _handle_ir_consumed(self, position: str):
-        """
-        Look up which conveyor owns this position and send STOP_HEARTBEAT.
-        """
-        conveyor_id = self.position_to_conveyor.get(position)
-        if conveyor_id is None:
-            self.get_logger().error(
-                f"❌ No conveyor found for position {position}"
-            )
-            return
-
-        self.get_logger().info(
-            f"🛑 Sending STOP_HEARTBEAT to Conveyor {conveyor_id} for {position}"
-        )
-        msg = String()
-        msg.data = "STOP_HEARTBEAT"
-        self.conveyor_cmd_pubs[conveyor_id].publish(msg)
+        self.get_logger().warn(f"⚠️ Unexpected command from superfactory: {command}")
 
     # ==================== PUBLISHERS ==================================
 

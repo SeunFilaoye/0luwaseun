@@ -103,11 +103,10 @@ class SuperFactoryNode(Node):
         self.task_ack_received = threading.Event()
         self.task_complete = threading.Event()
 
-        # IR readiness gating for conveyor pickups
-        self.ir_ready_flags = set()
+        # IR readiness gating for conveyor pickups.
+        # Purely event-driven: no flags stored. The conveyor only publishes
+        # after confirming the hardware has stopped, so there is no stale state.
         self.ir_ready_events = {}
-        # Lock makes the flag-check + event-clear atomic so _handle_ir_ready
-        # cannot fire between the two operations and have its .set() wiped out.
         self._ir_lock = threading.Lock()
 
         # Last command sent to each xArm — used to decide whether a READY
@@ -334,15 +333,7 @@ class SuperFactoryNode(Node):
             for evt in self._agv_arrived_events.values():
                 evt.clear()
 
-        # Clear stale IR flags from previous batches or runs.
-        # A flag that was never consumed (e.g. from an aborted session or a
-        # physical part left on a conveyor) would otherwise cause the next
-        # IR-gated robot to fire immediately without a part.
-        # Do NOT clear ir_ready_events: background route-chain threads from
-        # the previous batch may still hold references to those Event objects
-        # and clearing the dict would orphan those waiters.
-        with self._ir_lock:
-            self.ir_ready_flags.clear()
+        # No IR flags to clear — purely event-driven, no stored state.
 
         # Step 1: Extract all unique part IDs
         all_parts = set()
@@ -907,12 +898,9 @@ class SuperFactoryNode(Node):
         vendor = task['vendor']
         command = task['command']
 
-        # If this is a Niryo pickup from conveyor, wait for IR readiness.
-        # Skip for AGV unload tasks — the AGV arrival gate in run_chain already
-        # confirmed the part is physically present before this task was called.
-        # The lock makes the "check flag → clear event" sequence atomic with
-        # _handle_ir_ready's "add flag → set event" so we can never clear an
-        # event that was set between our flag-check and our event.clear().
+        # If this is a Niryo pickup from conveyor, wait for the conveyor to
+        # confirm it has stopped. Skip for AGV unload tasks — the AGV arrival
+        # gate already confirmed the part is present.
         if vendor == 'niryo' and not task.get('agv_unload_vendor'):
             ready_key = self._get_ir_ready_key_from_command(command)
             if ready_key:
@@ -985,38 +973,24 @@ class SuperFactoryNode(Node):
 
     def _wait_for_ir(self, ir_key: str, timeout: float) -> bool:
         """
-        Block until the conveyor IR sensor at ir_key fires, then consume the flag
-        and send IR_CONSUMED so the conveyor stops its heartbeat.
-
-        Returns True if IR was received, False on timeout.
+        Block until the conveyor confirms it has stopped for ir_key.
+        The conveyor only publishes after control_conveyor(False) succeeds,
+        so there is no stale state — we always wait for a fresh signal.
         """
-        self.get_logger().info(f"⏳ Waiting for IR_READY: {ir_key}...")
+        self.get_logger().info(f"⏳ Waiting for conveyor stop: {ir_key}...")
         with self._ir_lock:
             if ir_key not in self.ir_ready_events:
                 self.ir_ready_events[ir_key] = threading.Event()
-            already = ir_key in self.ir_ready_flags
-            if already:
-                self.ir_ready_flags.discard(ir_key)
             self.ir_ready_events[ir_key].clear()
 
-        if already:
-            self.get_logger().info(f"✅ IR already triggered for {ir_key}, proceeding")
-            self._notify_ir_consumed(ir_key)
-            return True
-
         fired = self.ir_ready_events[ir_key].wait(timeout=timeout)
+        if not fired:
+            self.get_logger().error(f"❌ Conveyor stop timeout for {ir_key}")
+            return False
+
         with self._ir_lock:
-            if ir_key in self.ir_ready_flags:
-                self.ir_ready_flags.discard(ir_key)
-                self.ir_ready_events[ir_key].clear()
-                self._notify_ir_consumed(ir_key)
-            elif not fired:
-                self.get_logger().error(f"❌ IR readiness timeout for {ir_key}")
-                return False
-            else:
-                self.get_logger().warn(
-                    f"⚠️ IR event fired for {ir_key} but flag already consumed — proceeding"
-                )
+            self.ir_ready_events[ir_key].clear()
+
         return True
 
     def _get_ir_ready_key_from_command(self, command: str):
@@ -1225,12 +1199,11 @@ class SuperFactoryNode(Node):
         # Lock is shared with _execute_task so the "add flag + set event"
         # sequence is atomic with respect to "check flag + clear event".
         with self._ir_lock:
-            self.ir_ready_flags.add(key)
             if key not in self.ir_ready_events:
                 self.ir_ready_events[key] = threading.Event()
             self.ir_ready_events[key].set()
 
-        self.get_logger().info(f"✅ IR ready for {key}")
+        self.get_logger().info(f"✅ Conveyor stopped, robot gated for {key}")
 
     def _handle_agv_arrived(self, vendor: str, status_msg: str):
         """
@@ -1280,18 +1253,6 @@ class SuperFactoryNode(Node):
                 return False
         return True
 
-    def _notify_ir_consumed(self, position_key: str):
-        """
-        Tell conveyor_factory that the IR flag for this position has been
-        consumed by a route chain, so the conveyor can stop heartbeating.
-        Fire-and-forget — no ACK wait needed.
-        """
-        command = f"IR_CONSUMED | {position_key}"
-        self.get_logger().info(f"📤 IR_CONSUMED → conveyor_factory: {position_key}")
-        if 'conveyor' in self.command_publishers:
-            msg = String()
-            msg.data = command
-            self.command_publishers['conveyor'].publish(msg)
 
     def _route_ready_to_agv(self, source_vendor: str, status_msg: str):
         """
