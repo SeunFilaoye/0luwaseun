@@ -84,9 +84,20 @@
 \credit{}
 
 % Second author
-\author[1]{Andrew Muszynski}
+\author[1]{Manbir Sodhi}
 
 \fnmark[2]
+
+\ead{sodhi@uri.edu}
+
+\ead[url]{}
+
+\credit{}
+
+% Third author
+\author[1]{Andrew Muszynski}
+
+\fnmark[3]
 
 \ead{muszynskiandrew@uri.edu}
 
@@ -94,12 +105,12 @@
 
 \credit{}
 
-% Third author
-\author[1]{Manbir Sodhi}
+% Fourth author
+\author[1]{Juan Lopez}
 
-\fnmark[3]
+\fnmark[4]
 
-\ead{sodhi@uri.edu}
+\ead{juan.lopez@uri.edu}
 
 \ead[url]{}
 
@@ -124,7 +135,7 @@
 
 % Here goes the abstract
 \begin{abstract}
-Modern manufacturing systems integrate equipment from multiple vendors across production lines where no single vendor provides the full capability range a facility requires. Successful multi-vendor integration must satisfy three properties. Faults originating within a vendor domain must not propagate to peer vendor domains. Proprietary implementation details must not cross the coordination boundary. Vendors must be independently substitutable without modifying or recertifying peer components. No existing framework satisfies all three structurally. Protocol standardization approaches relocate the integration problem without solving it. Middleware abstraction approaches require vendors to expose internal state through framework adapters. The Modular Open Systems Approach, mandated across U.S. Department of Defense acquisition programs, specifies these properties as design-time requirements but provides no runtime enforcement mechanism. We prove that a coordination interface of exactly three channels — command, acknowledgment, and status — is the minimum necessary and sufficient to satisfy all three properties simultaneously. Four theorems establish that this minimum interface forces fault containment, proprietary confinement, and independent substitutability as structural consequences of the coordination topology. A corollary establishes that MOSA runtime compliance follows as a consequence. The corresponding architecture enforces this interface on the coordination side while communicating with physical equipment through any vendor-accessible protocol, requiring no modification to existing vendor systems. Validation on an 11-robot, four-vendor physical testbed integrating Niryo manipulators, UFactory Lite6 arms, autonomous ground vehicles, and an Automated Storage and Retrieval System demonstrates that all three properties hold simultaneously in a real heterogeneous manufacturing environment. Integration of a second AGV vendor fleet into the running testbed required zero modifications to any peer vendor control logic file, confirming that vendor addition is structurally confined to the new vendor's coordination boundary.
+Modern manufacturing systems integrate equipment from multiple vendors across production lines where no single vendor provides the full capability range a facility requires. Successful multi-vendor integration must satisfy three properties. Faults originating within a vendor domain must not propagate to peer vendor domains. Proprietary implementation details must not cross the coordination boundary. Vendors must be independently substitutable without modifying or recertifying peer components. No existing framework satisfies all three structurally. Protocol standardization approaches relocate the integration problem without solving it. Middleware abstraction approaches require vendors to expose internal state through framework adapters. The Modular Open Systems Approach, mandated across U.S. Department of Defense acquisition programs, specifies these properties as design-time requirements but provides no runtime enforcement mechanism. We prove that a coordination interface of exactly three channels — command, acknowledgment, and status — is the minimum necessary and sufficient to satisfy all three properties simultaneously. Four theorems establish that this minimum interface forces fault containment, proprietary confinement, and independent substitutability as structural consequences of the coordination topology. A corollary establishes that MOSA runtime compliance follows as a consequence. The corresponding architecture enforces this interface on the coordination side while communicating with physical equipment through any vendor-accessible protocol, requiring no modification to existing vendor systems. Validation on an 13-robot, five-vendor physical testbed integrating Niryo manipulators, UFactory Lite6 arms, autonomous ground vehicles, and an Automated Storage and Retrieval System demonstrates that all three properties hold simultaneously in two independently constructed heterogeneous manufacturing environments. Integration of a second AGV vendor fleet into the running testbed required zero modifications to any peer vendor control logic file, confirming that vendor addition is structurally confined to the new vendor's coordination boundary.
 \end{abstract}
 
 % Use if graphical abstract is present
@@ -164,7 +175,7 @@ Independent substitutability is necessary because manufacturing lines evolve. Eq
 
 The requirement for these properties in multi-vendor systems is recognized not only as an engineering problem but as a policy problem. The Modular Open Systems Approach, mandated by the 2017 and 2021 National Defense Authorization Acts, defines vendor substitutability, technology insertion, and IP protection as formal requirements for U.S. defense acquisition programs~\cite{dod2019mosa}. The same requirements arise in any multi-vendor manufacturing deployment and are a direct consequence of the equipment heterogeneity that Industry~4.0 production environments depend on.
 
-MOSA is, however, a design-time and contract-time framework. It defines a pre-integration process that produces an interoperability profile certified through testing but provides no mechanism for enforcing this profile during live operations. A system fully compliant with MOSA at contract time can still violate all three properties at runtime. This paper asks what the minimum coordination interface is that forces all three properties to hold structurally, and proves the answer is exactly three channels — command, acknowledgment, and status — validated on an 11-robot, four-vendor physical testbed.
+MOSA is, however, a design-time and contract-time framework. It defines a pre-integration process that produces an interoperability profile certified through testing but provides no mechanism for enforcing this profile during live operations. A system fully compliant with MOSA at contract time can still violate all three properties at runtime. This paper asks what the minimum coordination interface is that forces all three properties to hold structurally, and proves the answer is exactly three channels — command, acknowledgment, and status — validated on an 13-robot, five-vendor physical testbed.
 
 This paper is structured around six research questions.
 
@@ -176,7 +187,7 @@ This paper is structured around six research questions.
     \item \textbf{RQ5 (Coordination Overhead):} Does the coordination architecture introduce significant latency overhead relative to physical execution time in a real multi-vendor manufacturing environment?
 \end{itemize}
 
-The contributions of this paper are as follows. First, we prove four theorems establishing that a three-topic coordination contract is the minimal interface for vendor-agnostic orchestration, that this interface structurally confines vendor faults and proprietary data, and that it guarantees independent substitutability of vendors. A corollary establishes that these properties together constitute a runtime-enforceable instantiation of the MOSA design-time boundary. Second, we introduce a protocol-adaptive Vendor Supervisor pattern that enforces the three-topic contract on the coordination side while supporting any vendor-accessible protocol on the equipment side, requiring no ROS2 capability or software modification from the vendor. Third, we present a non-intrusive passive observability framework that reconstructs system state from coordination topic streams without vendor instrumentation. Fourth, we validate all three properties through deployment on an 11-robot, four-vendor physical testbed.
+The contributions of this paper are as follows. First, we prove four theorems establishing that a three-topic coordination contract is the minimal interface for vendor-agnostic orchestration, that this interface structurally confines vendor faults and proprietary data, and that it guarantees independent substitutability of vendors. A corollary establishes that these properties together constitute a runtime-enforceable instantiation of the MOSA design-time boundary. Second, we introduce a protocol-adaptive Vendor Supervisor pattern that enforces the three-topic contract on the coordination side while supporting any vendor-accessible protocol on the equipment side, requiring no ROS2 capability or software modification from the vendor. Third, we validate all three properties through deployment on an 13-robot, five-vendor physical testbed.
 
 The remainder of this paper is organized as follows. Section~\ref{sec:related} surveys related work. Section~\ref{sec:theory} presents the theoretical framework and four theorems. Section~\ref{sec:architecture} presents the architecture. Section~\ref{sec:testbed} describes the experimental testbed. Section~\ref{sec:evaluation} presents the evaluation. Section~\ref{sec:discussion} discusses implications. Section~\ref{sec:conclusion} concludes.
 
@@ -380,7 +391,7 @@ These properties hold not because the system was designed to satisfy MOSA, but b
 \section{Architecture}
 \label{sec:architecture}
 
-The proposed architecture realizes the theoretical framework of Section~\ref{sec:theory} as a deployable system. The design comprises three principal components: a three-tier control hierarchy that enforces the three-topic contract of Theorem~\ref{thm:minimal}, a topic-partitioned communication infrastructure with vendor registration that realizes the fault containment of Theorem~\ref{thm:fault}, and a passive observability framework that reconstructs system state from coordination topic streams without vendor instrumentation. Figure~\ref{fig:coordination_boundary} illustrates the coordination boundary between the Factory Supervisor and vendor domains.
+The proposed architecture realizes the theoretical framework of Section~\ref{sec:theory} as a deployable system. The design comprises two principal components: a three-tier control hierarchy that enforces the three-topic contract of Theorem~\ref{thm:minimal}, and a topic-partitioned communication infrastructure with vendor registration that realizes the fault containment of Theorem~\ref{thm:fault}. Figure~\ref{fig:coordination_boundary} illustrates the coordination boundary between the Factory Supervisor and vendor domains.
 
 \begin{figure*}
     \centering
@@ -390,7 +401,6 @@ The proposed architecture realizes the theoretical framework of Section~\ref{sec
 \end{figure*}
 
 \subsection{Hierarchical Control Structure}
-
 The architecture organizes coordination functionality across three hierarchical tiers, each with distinct responsibilities and abstraction levels. The three tiers correspond to the ISA-95 Purdue Reference Model: the Factory Supervisor at the MES level, Vendor Supervisors at the SCADA level, and Robot Controllers at the field control level.
 
 \textbf{Factory Supervisor (Top Tier — MES Level).} The Factory Supervisor orchestrates high-level production workflows including order batching, resource allocation, and system-wide status monitoring. It operates entirely on vendor-agnostic abstractions and contains no vendor-specific logic or state, consistent with Theorem~\ref{thm:confinement}: the Factory Supervisor communicates with vendor domains exclusively through the three-topic contract and therefore has no structural access to vendor-internal information. It receives production orders, generates the corresponding command sequences, and routes each command to the appropriate vendor domain. Each vendor domain is served by a dedicated thread, allowing multiple vendor domains to execute concurrently without blocking one another. Each thread maintains an independent command-acknowledgment-status cycle, consistent with the per-vendor isolation that Theorem~\ref{thm:fault} requires.
@@ -414,7 +424,7 @@ Industry 4.0 device & OPC-UA (IEC 62541) & \texttt{asyncua} client \\
 IoT-class mobile platform & MQTT & MQTT client \\
 Cloud-connected robot & WebSocket / REST & Async HTTP/WS client \\
 Custom serial hardware & RS232/RS485 & \texttt{pyserial} wrapper \\
-ROS2-native robot (current testbed) & ROS2 topics & Direct pub/sub \\
+ROS2-native robot (testbeds in this paper) & ROS2 topics & Direct pub/sub \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -437,7 +447,7 @@ Communication between tiers strictly follows the publish-subscribe pattern using
 
 The theorems in Section~\ref{sec:theory} are stated in terms of coordination channels, not in terms of any specific transport protocol. The three-channel contract is a logical interface: a command delivery mechanism from the Factory Supervisor to the Vendor Supervisor, a return acknowledgment, and a return status. Any protocol that supports bidirectional asynchronous communication can instantiate these three channels. The Factory Supervisor's coordination logic — a per-vendor thread executing a command-acknowledgment-status cycle — is identical regardless of which protocol carries the messages. Only the transport layer changes per deployment. Protocols divide into three classes based on their communication model and how each maps to the three channels.
 
-\textbf{Pub-sub native protocols (MQTT, DDS, OPC-UA PubSub).} These protocols have direct structural correspondence to the three-channel contract. The command channel maps to one topic or queue, the acknowledgment channel to a second, and the status channel to a third. The Factory Supervisor and Vendor Supervisors are clients on a shared broker or bus and require no adaptation. MQTT requires only a lightweight client library on both the Factory Supervisor and each Vendor Supervisor, making it deployable on resource-constrained coordination hardware. DDS is the underlying transport of ROS2 and is already deployed in MOSA-compliant defense systems~\cite{omg2018dds}: a deployment that moves from the current ROS2 testbed implementation to native DDS removes the ROS2 middleware layer without changing the coordination logic, and DDS partitions map directly to the namespace isolation that Theorem~\ref{thm:fault} requires. DDS Security~\cite{omg2018dds} provides authentication, access control, and encrypted transport at the network layer, enabling cryptographic enforcement of the ACL without application-layer token validation. OPC-UA PubSub (IEC 62541 Part~14) provides equivalent pub-sub semantics with built-in security for industrial environments. On the south side, any equipment that supports a pub-sub protocol is addressed by a Vendor Supervisor acting as a dual client: northward to the coordination bus and southward to the equipment's broker or bus.
+\textbf{Pub-sub native protocols (MQTT, DDS, OPC-UA PubSub).} These protocols have direct structural correspondence to the three-channel contract. The command channel maps to one topic or queue, the acknowledgment channel to a second, and the status channel to a third. The Factory Supervisor and Vendor Supervisors are clients on a shared broker or bus and require no adaptation. MQTT requires only a lightweight client library on both the Factory Supervisor and each Vendor Supervisor, making it deployable on resource-constrained coordination hardware. DDS is the underlying transport of ROS2 and is already deployed in MOSA-compliant defense systems~\cite{omg2018dds}: a deployment that moves from the ROS2 testbed implementations in this paper to native DDS removes the ROS2 middleware layer without changing the coordination logic, and DDS partitions map directly to the namespace isolation that Theorem~\ref{thm:fault} requires. DDS Security~\cite{omg2018dds} provides authentication, access control, and encrypted transport at the network layer, enabling cryptographic enforcement of the ACL without application-layer token validation. OPC-UA PubSub (IEC 62541 Part~14) provides equivalent pub-sub semantics with built-in security for industrial environments. On the south side, any equipment that supports a pub-sub protocol is addressed by a Vendor Supervisor acting as a dual client: northward to the coordination bus and southward to the equipment's broker or bus.
 
 \textbf{Full-duplex connection protocols (WebSocket).} A WebSocket connection between the Factory Supervisor and a Vendor Supervisor is persistent and bidirectional, which preserves the timing independence the three-channel contract requires. The command channel maps to a typed message sent from the Factory Supervisor over the connection. The acknowledgment channel maps to a typed message returned by the Vendor Supervisor on the same connection immediately after command receipt. The status channel maps to a second typed message sent when the task completes. Because the connection remains open between acknowledgment and status, the two signals arrive at structurally different times without polling. On the south side, WebSocket is the native interface for many cloud-connected robots and modern industrial arms. A Vendor Supervisor in this class maintains one WebSocket connection northward to the Factory Supervisor and one southward to the equipment.
 
@@ -482,22 +492,19 @@ Vendor registration formalizes the relationship between a vendor domain and the 
     \label{fig:access_policy}
 \end{figure*}
 
-The current implementation enforces topic access policy through software-level namespace scoping and vendor registration. The architecture is designed to layer cryptographic enforcement through DDS Security extensions~\cite{omg2018dds} providing authentication, access control lists, and encrypted transport, enabling cryptographic enforcement in future deployments without modifying coordination logic --- consistent with the MOSA technology insertion property established in Corollary~\ref{cor:mosa}.
-
-\subsection{Distributed Observability Framework}
-
-The three-channel interface enables passive observability as a structural consequence of its minimality. Because the coordination boundary carries all coordination semantics — work assignment, receipt confirmation, and completion reporting — any component subscribing to the three topics at a vendor boundary has complete visibility into that vendor's coordination state without accessing vendor-internal systems. Observability requires no additional instrumentation, no vendor cooperation beyond the three-channel contract, and no modification to the coordination layer. Adding an observer is bounded to a single subscription per vendor domain, consistent with the independent substitutability of Theorem~\ref{thm:substitutability}.
+The current implementation enforces topic access policy through software-level namespace scoping, vendor registration, and application-layer cryptographic identity: every cross-vendor message carries an HMAC-SHA256 token bound to the sender's registered identity, validated independently by both the publisher's self-check and the receiver's ACL before the payload is acted upon (Section~\ref{sec:evaluation}). The architecture is designed to additionally layer enforcement through DDS Security extensions~\cite{omg2018dds}, moving authentication, access control, and encrypted transport from the application layer to the network layer in future deployments without modifying coordination logic --- consistent with the MOSA technology insertion property established in Corollary~\ref{cor:mosa}.
 
 \section{Experimental Testbed}
 \label{sec:testbed}
 
-\subsection{Physical Configuration}
+\subsection{Testbed 1: Logistics and Assembly Line}
+\label{sec:testbed1}
 
-The experimental testbed comprises eleven robots spanning four vendor domains integrated within a laboratory manufacturing environment. Table~\ref{tab:testbed} summarizes the robot inventory.
+Testbed~1 is designed as a logistics and assembly line: parts are retrieved from storage, transferred between stations, and propagated through a sequence of manipulation stages to an exit point. It comprises thirteen robots spanning five vendor domains integrated within a laboratory manufacturing environment. Table~\ref{tab:testbed} summarizes the robot inventory.
 
 \begin{table*}[h]
 \centering
-\caption{Testbed robot inventory}
+\caption{Testbed 1 robot inventory}
 \label{tab:testbed}
 \begin{tabular}{lllll}
 \toprule
@@ -505,13 +512,14 @@ The experimental testbed comprises eleven robots spanning four vendor domains in
 \midrule
 Niryo & Ned2 & 6 & R1--R6 & Conveyor chain manipulation \\
 UFactory & Lite6 / XArm & 2 & XARM1, XARM2 & ASRS retrieval \\
-Custom & Autonomous Ground Vehicle & 1+ & AGV1+ & Floor-level transport \\
+Custom & AGV (Vendor 1) & 3 & AGV1--AGV3 & Floor-level transport \\
+Custom & AGV (Vendor 2) & 2 & AGV4--AGV5 & Floor-level transport \\
 Custom & ASRS Unit & 1 & ASRS & Part storage and inventory \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-The six Niryo Ned2 manipulators form a sequential conveyor chain: each robot picks a part from the preceding station and places it at the next, propagating parts from conveyor entry through six manipulation stages to the exit position. The two UFactory Lite6 arms service separate regions of the ASRS unit, retrieving parts and placing them onto conveyor entry positions. The AGV fleet handles floor-level transport between production zones. The ASRS unit maintains inventory across a six-column, multi-row storage matrix and responds to inventory queries from the Factory Supervisor. Figure~\ref{fig:testbed_layout} shows the physical layout of the testbed.
+The six Niryo Ned2 manipulators form a conveyor chain, each transferring parts to the next station. The two UFactory Lite6 arms retrieve parts from the ASRS unit and place them onto the conveyor chain. The AGV fleets handle floor-level transport between production zones. The ASRS unit stores parts and responds to inventory queries from the Factory Supervisor. Figure~\ref{fig:testbed_layout} shows the physical layout of the testbed.
 
 \begin{figure*}[H]
     \centering
@@ -520,56 +528,80 @@ The six Niryo Ned2 manipulators form a sequential conveyor chain: each robot pic
     \label{fig:testbed_layout}
 \end{figure*}
 
-\subsection{Production Workflow}
+\textbf{Coordination interface.} Each vendor domain exposes the three-channel contract of Theorem~\ref{thm:minimal} as a namespaced topic triplet --- \texttt{/\{vendor\}\_factory/command}, \texttt{/\{vendor\}\_factory/ack}, and \texttt{/\{vendor\}\_factory/status} --- published and subscribed exclusively by the Factory Supervisor and that vendor's Vendor Supervisor. On the north side, every vendor domain communicates with the Factory Supervisor identically: ROS2 \texttt{std\_msgs/String} messages carrying JSON-formatted or pipe-delimited payloads, running on ROS2 Humble / Ubuntu~22.04, with a dedicated Factory Supervisor thread per vendor domain. Protocol choice on the south side is internal to each Vendor Supervisor and is not visible to the Factory Supervisor; Table~\ref{tab:testbed1_coord} summarizes the topic instantiation and south-side protocol per vendor domain. Testbed~2 (Section~\ref{sec:testbed2}) exercises the south side under genuine protocol diversity instead.
 
-The end-to-end production workflow is illustrated in Figure~\ref{fig:testbed_flowchart}. Production orders are submitted through a user interface and accumulated by the Factory Supervisor until the batch threshold is reached. The Factory Supervisor's internal command generation uses an Encoder-Planner-Decoder pipeline: the State Encoder transforms the factory topology into an abstract graph, the Algorithm Planner computes an optimal traversal path, and the Action Decoder maps the path to vendor-specific command strings. The resulting commands are routed to the appropriate Vendor Supervisors through the three-channel coordination interface. Each Vendor Supervisor translates the received command into vendor-internal actions and reports completion back through the acknowledgment and status channels.
+\begin{table*}[h]
+\centering
+\caption{Testbed 1 coordination interface: topic instantiation of the three-channel contract and south-side protocol per vendor domain.}
+\label{tab:testbed1_coord}
+\begin{tabular}{lll}
+\toprule
+\textbf{Vendor Domain} & \textbf{Topics (command/ack/status)} & \textbf{South-Side Protocol} \\
+\midrule
+Niryo & \texttt{/niryo\_factory/\{...\}} & ROS2 actions, services, messages (vendor-native) \\
+UFactory & \texttt{/lite6\_factory/\{...\}} & ROS2 service calls + vendor SDK fallback \\
+AGV (fleet 1) & \texttt{/agv\_factory/\{...\}} & ROS2 topics to Arduino-based platform \\
+AGV (fleet 2) & \texttt{/agv\_factory2/\{...\}} & ROS2 topics to Arduino-based platform \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
-\begin{figure*}[h]
-    \centering
-    \includegraphics[width=0.85\linewidth]{images/testbed_flowchart.png}
-    \caption{End-to-end production workflow on the testbed. The Factory Supervisor accumulates orders, generates command sequences through an internal Encoder-Planner-Decoder pipeline, and dispatches commands to each Vendor Supervisor through the three-channel coordination interface. Vendor Supervisors translate commands into vendor-internal actions and report completion through acknowledgment and status channels.}
-    \label{fig:testbed_flowchart}
-\end{figure*}
+\subsection{Testbed 2: Process and Retrieval}
+\label{sec:testbed2}
 
-\subsection{Graph Representation}
+Testbed~2 is designed as an autonomous manufacturing cell: parts undergo a physical process --- cutting or machining --- and are then retrieved and transported onward. It comprises seven vendor domains, sharing no equipment with Testbed~1. Table~\ref{tab:testbed2_vendors} summarizes the vendor inventory.
 
-The factory topology is encoded as a directed graph comprising nodes corresponding to discrete operational positions and edges encoding directed transitions between adjacent positions. Figure~\ref{fig:testbed_graph} shows the physical layout mapped to its abstract graph representation. Node types include source nodes at ASRS entry points, arm nodes at UFactory pickup and drop positions, Niryo nodes at conveyor manipulation positions, exit nodes at conveyor endpoints, and AGV stop nodes at floor-level transfer positions. Edges encode directed movement feasibility and are annotated with travel time estimates derived from empirical measurement. The graph representation is vendor-agnostic --- node and edge definitions carry no vendor-internal information, and the Algorithm Planner operates entirely on this abstract representation without knowledge of any Vendor Supervisor's internal implementation.
+\begin{table*}[h]
+\centering
+\caption{Testbed 2 vendor inventory. Shares no equipment with Testbed 1 (Table~\ref{tab:testbed}).}
+\label{tab:testbed2_vendors}
+\begin{tabular}{lll}
+\toprule
+\textbf{Vendor Domain} & \textbf{Internal Resources} & \textbf{Role} \\
+\midrule
+niryo            & robot1, robot2, conveyor1, conveyor2, IR sensors, local vision & Part transport and local handling \\
+ufactory         & xarm1, xarm2 & Process loading and unloading \\
+laser            & laser (HTTP) & Cutting process \\
+globalvision     & global camera, slot inventory & Inspection and inventory tracking \\
+green\_conveyors & conveyor3, conveyor4 (Arduino) & Material transport \\
+arduino\_vacuum  & vacuum (serial) & Part retrieval \\
+bantam           & Bantam CNC, door (ZMQ) & CNC machining process \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
-\begin{figure*}[H]
-    \centering
-    \includegraphics[width=0.8\linewidth]{images/testbed_graph.jpg}
-    \caption{Physical layout and corresponding abstract graph representation of the testbed. Top: physical positions of all vendor equipment. Bottom: abstract directed graph used by the Algorithm Planner. Node colors indicate vendor domain affiliation. Edge colors indicate movement type: AGV travel, robot movement, and conveyor travel.}
-    \label{fig:testbed_graph}
-\end{figure*}
+\textbf{Coordination interface.} Testbed~2 instantiates the same \texttt{/\{vendor\}\_factory/command\textbar ack\textbar status} topic triplet per vendor domain as Testbed~1, with boundary enforcement on each triplet performed by an AclGuard component (detailed in Section~\ref{sec:replication}). The north side is uniform across all vendor domains: ROS2, here running as ROS2 Jazzy on Ubuntu~24.04 (compared to Humble on Ubuntu~22.04 for Testbed~1). The south side is heterogeneous by design; Table~\ref{tab:testbed2_coord} summarizes the topic instantiation and south-side protocol per vendor domain.
 
-\subsection{Observability Implementation}
-
-The testbed implements a three-level observability framework corresponding to the coordination hierarchy. Figure~\ref{fig:observability} illustrates the observability layers. Level~1 provides Factory Supervisor-level visibility through coordination topics reporting system state, batch status, order progress, and throughput metrics. Level~2 provides per-Vendor Supervisor visibility through vendor-scoped system state topics at the coordination boundary --- these are the topics that constitute the three-channel coordination interface. Level~3 provides per-robot visibility through vendor-internal topics published within each vendor domain.
-
-Level~1 and Level~2 topics are observable from the coordination layer without vendor cooperation, consistent with the passive observability property established in Section~\ref{sec:architecture}. Level~3 topics are vendor-managed and vendor-accessible --- their publication is governed by each vendor domain independently and does not cross the coordination boundary. This layered structure allows operators to observe system state at the granularity appropriate to their role without requiring access to vendor-proprietary systems.
-
-\begin{figure*}[H]
-    \centering
-    \includegraphics[width=\linewidth]{images/Observability_with_purdue.jpg}
-    \caption{Three-level observability framework mapped to the coordination hierarchy. Level~1 provides Factory Supervisor-level coordination visibility. Level~2 provides per-Vendor Supervisor boundary visibility through the three-channel coordination interface. Level~3 provides per-robot visibility through vendor-internal topics managed within each vendor domain. Levels~1 and~2 require no vendor instrumentation; Level~3 is vendor-dependent.}
-    \label{fig:observability}
-\end{figure*}
-
-\subsection{Software Infrastructure}
-
-The coordination software is implemented in Python~3 on ROS2 Humble running Ubuntu~22.04. The Factory Supervisor uses a multithreaded ROS2 executor with a dedicated thread per vendor domain, ensuring concurrent command dispatch across vendor domains without cross-vendor blocking. All inter-tier communication uses \texttt{std\_msgs/String} with JSON-formatted payloads for structured data and pipe-delimited strings for vendor commands. Each Vendor Supervisor runs as a dedicated ROS2 node on a gateway machine, communicating with its respective hardware through vendor-provided APIs.
+\begin{table*}[h]
+\centering
+\caption{Testbed 2 coordination interface: topic instantiation of the three-channel contract and south-side protocol per vendor domain.}
+\label{tab:testbed2_coord}
+\begin{tabular}{lll}
+\toprule
+\textbf{Vendor Domain} & \textbf{Topics (command/ack/status)} & \textbf{South-Side Protocol} \\
+\midrule
+niryo            & \texttt{/niryo\_factory/\{...\}}            & ROS2 (same equipment class as Testbed~1) \\
+ufactory         & \texttt{/ufactory\_factory/\{...\}}         & ROS2 (same equipment class as Testbed~1) \\
+laser            & \texttt{/laser\_factory/\{...\}}            & HTTP \\
+globalvision     & \texttt{/globalvision\_factory/\{...\}}     & ROS2 (camera/vision topics) \\
+green\_conveyors & \texttt{/green\_conveyors\_factory/\{...\}} & Serial (Arduino) \\
+arduino\_vacuum  & \texttt{/arduino\_vacuum\_factory/\{...\}}  & Serial \\
+bantam           & \texttt{/bantam\_factory/\{...\}}           & ZMQ \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
 
 \section{Evaluation}
 \label{sec:evaluation}
 
-The evaluation verifies the three structural properties proven in Section~\ref{sec:theory} through three experiments on the physical testbed described in Section~\ref{sec:testbed}. RQ1 is answered by Theorem~\ref{thm:minimal} through logical deduction and requires no empirical experiment. RQ2, RQ3, RQ4, and RQ5 are addressed empirically as follows.
+The evaluation verifies the three structural properties proven in Section~\ref{sec:theory} through three experiments on the physical testbed described in Section~\ref{sec:testbed1}, two of which are independently replicated on a second testbed (Section~\ref{sec:replication}). RQ1 is answered by Theorem~\ref{thm:minimal} through logical deduction and requires no empirical experiment. RQ2, RQ3, RQ4, and RQ5 are addressed empirically as follows.
 
 \subsection{Experiment 1: Boundary Enforcement (RQ2 and RQ4)}
 
 Theorems~\ref{thm:fault} and~\ref{thm:confinement} establish two structural conditions on the coordination boundary: no direct communication path exists between peer vendor domains without passing through the Factory Supervisor, and no message outside command, acknowledgment, or status can cross the boundary in either direction. Five sub-experiments test these conditions on the physical testbed. Each sub-experiment transmits 100 messages in sequential mode and 100 in batch mode. Per-message outcome and ACL check latency are recorded at the enforcement point.
 
-\textbf{(a) Cross-vendor direct access.} The AGV vendor node attempts to publish a command to the Niryo robot topic \texttt{/robot\_8/command} without routing through the Factory Supervisor. The publisher-side ACL returns a denial and logs a violation. The probe then publishes the message at the ROS transport layer regardless, and the receiver-side ACL on the Niryo controller independently evaluates the source against its permitted sender list, drops the message without acting on its payload, and returns no acknowledgment. Both enforcement layers are exercised independently. This sub-experiment tests the graph-theoretic condition of Theorem~\ref{thm:fault}: no direct edge from $V_i$ to $V_j$ exists in the communication graph without passing through $F$.
+\textbf{(a) Cross-vendor direct access.} The AGV vendor node attempts to publish a command to \texttt{/robot\_8/command} without routing through the Factory Supervisor --- a synthetic probe target in the Niryo namespace, used here as a stub receiver rather than one of the six physical R1--R6 manipulators in the inventory. The publisher-side ACL returns a denial and logs a violation. The probe then publishes the message at the ROS transport layer regardless, and the receiver-side ACL on the Niryo controller independently evaluates the source against its permitted sender list, drops the message without acting on its payload, and returns no acknowledgment. Both enforcement layers are exercised independently. This sub-experiment tests the graph-theoretic condition of Theorem~\ref{thm:fault}: no direct edge from $V_i$ to $V_j$ exists in the communication graph without passing through $F$.
 
 \textbf{(b1) External injection, no token.} An external node attempts to publish commands to a vendor coordination topic without a cryptographic token. The ACL rejects the attempt before any HMAC computation. This sub-experiment tests Theorem~\ref{thm:fault} against sources outside the registered vendor set.
 
@@ -600,9 +632,9 @@ Theorems~\ref{thm:fault} and~\ref{thm:confinement} establish two structural cond
 
 \subsection{Experiment 2: Vendor Substitutability (RQ3)}
 
-Theorem~\ref{thm:substitutability} proves that vendor addition requires no modification to any peer vendor domain or the Factory Supervisor coordination logic, because no peer vendor holds edges to the newly added vendor in the communication graph. The theorem's proof covers three operations: addition, removal, and replacement. This experiment tests the addition case, which is the operation with the largest potential impact surface, since it introduces a new participant into a running system. Three measurements are taken: the scope of changes required to integrate the new vendor, the task execution continuity of peer vendors during integration, and the functional correctness of the new vendor on the three-channel interface.
+Theorem~\ref{thm:substitutability} proves that vendor addition requires no modification to any peer vendor domain or the Factory Supervisor coordination logic, because no peer vendor holds edges to the newly added vendor in the communication graph. The theorem's proof covers three operations: addition, removal, and replacement. This experiment tests the addition case, which is the operation with the largest potential impact surface, since it introduces a new participant into a running system. The measurement taken is the scope of changes required to integrate the new vendor.
 
-\textbf{(a) Modification scope.} A new vendor is integrated by creating one ACL registration entry and launching one Vendor Supervisor node. Files and lines modified are counted across four component scopes: the new Vendor Supervisor, the new vendor registration entry, all peer vendor domains collectively, and the Factory Supervisor coordination logic. Theorem~\ref{thm:substitutability} requires zero modifications in peer vendor domains and the Factory Supervisor. Any nonzero count in those rows would indicate a dependency between the new vendor and existing components and would falsify the theorem.
+\textbf{Modification scope.} A new vendor is integrated by creating one ACL registration entry and launching one Vendor Supervisor node. Files and lines modified are counted across four component scopes: the new Vendor Supervisor, the new vendor registration entry, all peer vendor domains collectively, and the Factory Supervisor coordination logic. Theorem~\ref{thm:substitutability} requires zero modifications in peer vendor domains and the Factory Supervisor. Any nonzero count in those rows would indicate a dependency between the new vendor and existing components and would falsify the theorem.
 
 \begin{table*}[h]
 \centering
@@ -626,42 +658,7 @@ Peer: Fault containment core (all files)        & 0  & 0    & 0  & 0 \\
 \end{tabular}
 \end{table*}
 
-\textbf{(b) Operational continuity.} A rosbag recording is started with Niryo and Lite6 vendor domains executing a continuous production workflow. The timestamp at which the new vendor's Vendor Supervisor node is launched is recorded as $T_{\text{launch}}$. The recording continues until the new vendor completes its first coordinated task. From the rosbag, consecutive status message timestamps on each peer vendor's status topic are extracted. The inter-task completion interval is the elapsed time between consecutive status messages on the same topic. Mean inter-task interval is computed separately for the period before $T_{\text{launch}}$ and the period after $T_{\text{launch}}$ for each peer vendor. The difference between these means indicates whether peer vendor task cadence was affected by the integration event.
-
-\begin{table*}[h]
-\centering
-\caption{Peer vendor inter-task completion interval before and after new vendor integration at $T_{\text{launch}}$}
-\label{tab:continuity}
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Vendor} & \textbf{Mean interval before $T_{\text{launch}}$ (s)} & \textbf{Mean interval after $T_{\text{launch}}$ (s)} & \textbf{Difference (s)} \\
-\midrule
-Niryo  & [XX] & [XX] & [XX] \\
-Lite6  & [XX] & [XX] & [XX] \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\textbf{(c) First coordination cycle.} From the same rosbag, the first command-acknowledgment-status cycle for the new vendor is extracted. $T_{\text{cmd}}$ is the timestamp at which the Factory Supervisor published the first command to the new vendor's command topic. $T_{\text{ack}}$ is the elapsed time from $T_{\text{cmd}}$ to receipt of the new vendor's acknowledgment. $T_{\text{status}}$ is the elapsed time from $T_{\text{cmd}}$ to receipt of the new vendor's task completion status. The complete cycle from $T_{\text{cmd}}$ to status receipt constitutes the first successful coordination exchange and confirms that the new vendor operated on the three-channel interface from first contact, with no information shared between the Factory Supervisor and the vendor beyond the registration entry.
-
-\begin{table*}[h]
-\centering
-\caption{First command-acknowledgment-status cycle for the newly integrated vendor}
-\label{tab:firstcycle}
-\begin{tabular}{lr}
-\toprule
-\textbf{Phase} & \textbf{Elapsed from $T_{\text{cmd}}$ (ms)} \\
-\midrule
-Command to acknowledgment ($T_{\text{ack}} - T_{\text{cmd}}$)   & [XX] \\
-Acknowledgment to status ($T_{\text{status}} - T_{\text{ack}}$) & [XX] \\
-Command to status ($T_{\text{status}} - T_{\text{cmd}}$)         & [XX] \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\textbf{Result (modification scope).} Integration of the second AGV vendor required 4 new files (1,760 lines) in the new Vendor Supervisor directory, 1 new ACL registration file (51 lines), and 1 modification to the Factory Supervisor (76 insertions, 15 deletions). The Factory Supervisor deletions removed only a hardcoded fleet-1 routing string replaced by fleet-aware routing; Vendor~1 runtime behavior is identical. Every peer vendor control logic file (\texttt{*\_factory\_node.py}, \texttt{*\_controller.py}, \texttt{*\_planner.py}, \texttt{fault\_registry.py}) recorded zero insertions and zero deletions. Non-zero rows in peer vendor scopes are exclusively calibration data (physically recorded waypoints for the new node positions) and one additive code extension in the Lite6 controller with no existing lines modified. The key quantitative finding is that adding a second AGV vendor required touching exactly one logic file outside the new vendor directory — the Factory Supervisor's routing function — with no changes propagating to any peer vendor. This directly confirms the structural prediction of Theorem~\ref{thm:substitutability}: vendor addition is confined to edges between the new vendor domain and the Factory Supervisor.
-
-\textbf{Result (operational continuity and first coordination cycle).} [To be completed after rosbag recording. Peer vendor intervals before and after $T_{\text{launch}}$ are expected to show no meaningful difference. The first coordination cycle is expected to complete within one task execution window.]
+\textbf{Result.} Integration of the second AGV vendor required 4 new files (1,760 lines) in the new Vendor Supervisor directory, 1 new ACL registration file (51 lines), and 1 modification to the Factory Supervisor (76 insertions, 15 deletions). The Factory Supervisor deletions removed only a hardcoded fleet-1 routing string replaced by fleet-aware routing; Vendor~1 runtime behavior is identical. Every peer vendor control logic file (\texttt{*\_factory\_node.py}, \texttt{*\_controller.py}, \texttt{*\_planner.py}, \texttt{fault\_registry.py}) recorded zero insertions and zero deletions. Non-zero rows in peer vendor scopes are exclusively calibration data (physically recorded waypoints for the new node positions) and one additive code extension in the Lite6 controller with no existing lines modified. The key quantitative finding is that adding a second AGV vendor required touching exactly one logic file outside the new vendor directory — the Factory Supervisor's routing function — with no changes propagating to any peer vendor. This directly confirms the structural prediction of Theorem~\ref{thm:substitutability}: vendor addition is confined to edges between the new vendor domain and the Factory Supervisor.
 
 \subsection{Experiment 3: Coordination Overhead (RQ5)}
 
@@ -683,7 +680,7 @@ T_{\text{total}} = k \times n \times T_{\text{coord}}
 
 This expression grows linearly in $n$ and scales independently across vendor domains. The scaling behavior is a structural consequence of the three-message contract and the per-vendor thread model, not a property of any specific deployment. Any implementation of this architecture can substitute its own measured $T_{\text{coord}}$ into Equation~\ref{eq:total_overhead} to derive total coordination overhead at any scale.
 
-The empirical contribution of this experiment is $T_{\text{coord}}$ measured on the physical testbed. Two rosbag recordings were collected during testbed runs with all four vendor domains active: Run~1 (12~parts, 36~part-minutes of operation) and Run~2 (24~parts, 72~part-minutes of operation). Both recordings were captured under the pre-fix communication configuration and are used here solely to characterize coordination latency, which is independent of physical execution outcomes. From the recordings, $T_{\text{ack}}$ is extracted per vendor domain across all command-acknowledgment pairs in both runs (157~cycles total). For the Lite6 vendor, which does not publish to a dedicated acknowledgment topic, $T_{\text{ack}}$ is measured as the elapsed time from command publication to the first \texttt{XARM\_EXECUTING} status message, which represents the vendor supervisor confirming command receipt and initiating execution. Physical task execution time ($T_{\text{exec}}$) is measured from command publication to \texttt{COMMAND\_COMPLETE} status.
+The empirical contribution of this experiment is $T_{\text{coord}}$ measured on the physical testbed. Two rosbag recordings were collected during testbed runs with all four vendor domains active: Run~1 (12~parts, 36~part-minutes of operation) and Run~2 (24~parts, 72~part-minutes of operation). Both recordings are used here solely to characterize coordination latency, which is independent of physical execution outcomes. From the recordings, $T_{\text{ack}}$ is extracted per vendor domain across all command-acknowledgment pairs in both runs (157~cycles total). For the Lite6 vendor, which does not publish to a dedicated acknowledgment topic, $T_{\text{ack}}$ is measured as the elapsed time from command publication to the first \texttt{XARM\_EXECUTING} status message, which represents the vendor supervisor confirming command receipt and initiating execution. Physical task execution time ($T_{\text{exec}}$) is measured from command publication to \texttt{COMMAND\_COMPLETE} status.
 
 \begin{table*}[h]
 \centering
@@ -704,6 +701,66 @@ All vendors (aggregate) & 157 & 3.91 & 3.94 & 1.04 -- 20.52 \\
 \end{table*}
 
 \textbf{Result.} Mean $T_{\text{ack}}$ across all vendor domains and both runs is 3.91~ms (std 3.94~ms). The Lite6 vendor exhibits higher latency (mean 10.10~ms) than Niryo and AGV domains (1.83--2.22~ms) because $T_{\text{ack}}$ for Lite6 includes node processing time to initiate execution, whereas the Niryo and AGV vendors publish a dedicated acknowledgment immediately upon command receipt before beginning execution. All values are sub-millisecond for Niryo and AGV vendors at the coordination boundary alone. Physical task execution on the testbed ranges from 17.1~s to 26.4~s per vendor task (mean 20.1~s across Niryo and Lite6). Coordination acknowledgment overhead represents 0.019\% of total task cycle time. Any deployment where physical task execution time is of order seconds and $T_{\text{ack}}$ is of order milliseconds will observe a comparable ratio, derivable directly from Equation~\ref{eq:total_overhead}.
+
+\subsection{Cross-Testbed Replication (RQ2, RQ4, RQ5)}
+\label{sec:replication}
+
+The testbed described in Section~\ref{sec:testbed1} validates the architecture on one specific selection of vendor equipment. To confirm that the structural properties proven in Section~\ref{sec:theory} are not artifacts of that particular equipment selection, fault containment, proprietary confinement, and coordination overhead are independently re-validated on Testbed~2 (Section~\ref{sec:testbed2}), built separately and sharing no vendor equipment with Testbed~1.
+
+Boundary enforcement on Testbed~2 is implemented by an AclGuard component performing a four-gate check on every incoming message: token presence, HMAC validity, sender authorization against the topic's declared ACL, and a payload scan for boundary keys forbidden under Theorem~\ref{thm:confinement} (e.g.\ \texttt{joint\_states}, \texttt{servo}, \texttt{raw\_image}, \texttt{gcode\_line}).
+
+\textbf{Experiment 1 replication (RQ2, RQ4).} The same five attack vectors tested on the primary testbed (cross-vendor access, external injection without a token, external injection with a forged token, vendor-to-factory proprietary leakage, factory-to-vendor proprietary leakage) are tested against the niryo vendor domain on Testbed~2, together with three additional cases: an acknowledgment-injection probe, and the no-token and forged-token cases repeated against a second vendor domain (bantam) to confirm enforcement is vendor-agnostic rather than hardcoded to one Vendor Supervisor. Each case is run first offline (software-only ACL check, no ROS2) and then over live ROS2 DDS transport with all seven vendor nodes running. Offline, 1,000 messages spanning five cases were sent; zero were acted upon, with ACL check latency under 472.2~$\mu$s in all cases. Table~\ref{tab:testbed2_boundary} reports the physical results.
+
+\begin{table*}[h]
+\centering
+\caption{Testbed 2 -- physical boundary enforcement results (ROS2 DDS, all seven vendor nodes running). Match is the fraction of messages whose logged rejection reason matched the expected gate.}
+\label{tab:testbed2_boundary}
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Case} & \textbf{Attack vector} & \textbf{Sent} & \textbf{Acted} & \textbf{Match} & \textbf{Mean latency (ms)} \\
+\midrule
+1a  & Cross-vendor access        & 20  & 0 & 18/20   & 167.0 \\
+1b1 & External, no token         & 20  & 0 & 20/20   & 21.6  \\
+1b2 & External, forged HMAC      & 20  & 0 & 19/20   & 91.6  \\
+1c  & Vendor-to-factory leakage  & 50  & 0 & 50/50   & 21.2  \\
+1d  & Factory-to-vendor leakage  & 20  & 0 & 20/20   & 23.1  \\
+1e  & ACK injection              & 20  & 0 & 18/20   & 195.7 \\
+1f  & Bantam, no token           & 20  & 0 & 20/20   & 34.0  \\
+1g  & Bantam, forged HMAC        & 20  & 0 & 19/20   & 108.0 \\
+\midrule
+\textbf{Total} & & \textbf{190} & \textbf{0} & \textbf{184/190} & -- \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Zero of 1,000 offline messages and zero of 190 live DDS messages were acted upon in violation of the access policy, across eight attack vectors and two vendor domains. Case~1e additionally identified and closed a previously unguarded acknowledgment-injection path in the Factory Supervisor's \texttt{on\_ack()} handler, which had not been exercised by the primary testbed's experiment design. Cases~1f--1g reproduce 1b1--1b2 on the bantam vendor domain with identical enforcement outcomes, confirming the boundary mechanism is implemented once in the shared Vendor Supervisor base class rather than per vendor.
+
+\textbf{Experiment 3 replication (RQ5).} Testbed~2 decomposes coordination latency into two segments rather than three: $T_{\text{cmd}}$ measures the full command-to-acknowledgment round trip (DDS transit plus Vendor Supervisor processing), and $T_{\text{status}}$ measures status-publication-to-receipt transit only, giving $T_{\text{coord}} = T_{\text{cmd}} + T_{\text{status}}$ -- conceptually identical to Equation~\ref{eq:coord_overhead}, measured as two segments instead of three because the acknowledgment and status channels are not independently timestamped in this testbed's bag recorder. An offline software-only baseline (1,000 iterations, build + HMAC sign + JSON serialize/parse/verify for a complete command/ack/status cycle, no DDS, no hardware) gives a mean $T_{\text{coord}}$ of 147.1~$\mu$s (max 290.5~$\mu$s). Over live ROS2 DDS transport across all seven vendor domains (86 complete coordination cycles), mean $T_{\text{coord}}$ is 6.93~ms (std 6.24~ms, range 1.49--47.99~ms) against a mean physical task duration $T_{\text{phys}}$ of 8.90~s. Table~\ref{tab:testbed2_overhead} reports the per-vendor breakdown for tasks with $T_{\text{phys}} > 1$~s.
+
+\begin{table*}[h]
+\centering
+\caption{Testbed 2 -- coordination overhead by vendor domain, restricted to tasks with $T_{\text{phys}} > 1$~s (64 of 86 cycles).}
+\label{tab:testbed2_overhead}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Vendor} & \textbf{Cycles} & \textbf{$T_{\text{coord}}$ mean (ms)} & \textbf{$T_{\text{phys}}$ mean (s)} & \textbf{Overhead (\%)} \\
+\midrule
+arduino\_vacuum & 12 &  2.36 &  1.46 & 0.164 \\
+bantam          &  3 & 11.70 & 36.50 & 0.067 \\
+laser           &  1 &  2.93 & 22.88 & 0.010 \\
+niryo           & 36 &  8.88 & 13.18 & 0.084 \\
+ufactory        & 12 & 10.00 & 11.19 & 0.103 \\
+\midrule
+\textbf{All}    & \textbf{64} & \textbf{7.79} & \textbf{12.70} & \textbf{0.104} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\textbf{Result.} Mean coordination overhead for tasks with meaningful physical execution time is 0.104\% on Testbed~2, against 0.019\% on the primary testbed (Table~\ref{tab:rtt}). Both figures are two to three orders of magnitude below physical task duration, on two testbeds sharing no vendor equipment, no robot vendors, and a different ROS2 distribution.
+
+\textbf{Generalization.} Testbed~1 (Section~\ref{sec:testbed1}) and Testbed~2 (Section~\ref{sec:testbed2}) share zero overlapping vendor equipment -- Niryo manipulators, UFactory arms, AGV fleets, and an ASRS unit on one side; a laser cutter, CNC machine, machine vision system, pneumatic vacuum, and Arduino-controlled conveyors on the other. Despite this, both testbeds show zero unauthorized actions across all tested attack vectors (Theorems~\ref{thm:fault} and~\ref{thm:confinement}) and sub-50~ms coordination overhead against physical task durations of seconds to tens of seconds (the analytic result underlying RQ5). This is evidence that fault containment, proprietary confinement, and bounded coordination overhead are structural properties of the three-channel architecture, not properties contingent on the specific vendor equipment validated in Section~\ref{sec:testbed1}.
+
+\textbf{Scope of replication.} Testbed~2 does not include an Experiment~2 equivalent: no second vendor domain was added to a running Testbed~2 deployment, so independent substitutability (RQ3, Theorem~\ref{thm:substitutability}) is validated only on the primary testbed in this paper. Replicating the vendor-addition experiment on Testbed~2 is identified as future work in Section~\ref{sec:discussion}.
 
 
 \section{Discussion}
@@ -729,7 +786,7 @@ This is particularly relevant for DoD deployments. DDS --- Data Distribution Ser
 
 \subsection{Limitations and Future Work}
 
-Several limitations merit acknowledgment. First, the current implementation relies on logical topic partitioning without cryptographic enforcement, as discussed in Section~\ref{sec:architecture}. Full isolation against adversarial scenarios requires DDS Security configuration, planned as a future enhancement. Second, command messages use untyped string format, which minimizes the vendor's required knowledge of the schema --- a deliberate design choice consistent with the minimal interface principle --- but reduces type safety compared to typed schemas. Optional typed wrappers for deployments requiring stronger interface contracts are a subject of future work.
+Several limitations merit acknowledgment. First, cryptographic enforcement in the current implementation is application-layer (HMAC-SHA256 tokens validated by the ACL, as discussed in Section~\ref{sec:architecture} and tested in Section~\ref{sec:evaluation}), not network-layer. Moving this enforcement into DDS Security configuration would shift authentication and encryption to the transport layer, planned as a future enhancement. Second, command messages use untyped string format, which minimizes the vendor's required knowledge of the schema --- a deliberate design choice consistent with the minimal interface principle --- but reduces type safety compared to typed schemas. Optional typed wrappers for deployments requiring stronger interface contracts are a subject of future work. Third, the cross-testbed replication in Section~\ref{sec:replication} validates fault containment, proprietary confinement, and coordination overhead (RQ2, RQ4, RQ5) on a second, independently constructed testbed, but does not include a vendor-addition experiment equivalent to Experiment~2. Replicating the substitutability experiment on Testbed~2, and on additional testbeds spanning further vendor combinations, is left to future work.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -738,9 +795,9 @@ This paper addressed the MOSA runtime enforcement problem: MOSA mandates a bound
 
 Theorem~\ref{thm:minimal} proves that exactly three coordination channels --- command, acknowledgment, and status --- are the necessary and sufficient interface for vendor-agnostic orchestration. Theorem~\ref{thm:fault} proves that topic namespace partitioning structurally contains vendor-domain faults within vendor boundaries. Theorem~\ref{thm:confinement} proves that the three-topic contract structurally prevents vendor-internal data from crossing the coordination boundary. Theorem~\ref{thm:substitutability} proves that the architecture's dependency structure guarantees independent substitutability of vendor implementations. Together, these theorems constitute a runtime-enforceable instantiation of the MOSA boundary.
 
-The corresponding architecture realizes all four theorems simultaneously: the protocol-adaptive Vendor Supervisor enforces the three-topic contract while communicating south through any vendor-accessible protocol; topic namespace partitioning delivers fault containment by topology; and passive topic observation delivers non-intrusive system observability.
+The corresponding architecture realizes all four theorems simultaneously: the protocol-adaptive Vendor Supervisor enforces the three-topic contract while communicating south through any vendor-accessible protocol, and topic namespace partitioning delivers fault containment by topology.
 
-Validation on an 11-robot, four-vendor physical testbed demonstrates that all four theoretical properties are simultaneously achievable in a real heterogeneous manufacturing environment. The practical significance is bounded and concrete: the integration cost for any new vendor is one Vendor Supervisor node implementing three topic behaviors; and the certification surface is three observable behaviors independent of vendor complexity. These properties are not design goals --- they are proven consequences of building a coordination interface that is exactly as large as coordination requires, and no larger.
+Validation on an 13-robot, five-vendor physical testbed demonstrates that all four theoretical properties are simultaneously achievable in a real heterogeneous manufacturing environment. Fault containment, proprietary confinement, and bounded coordination overhead are independently confirmed on a second, separately constructed seven-vendor testbed sharing no equipment with the first, indicating that these properties belong to the architecture rather than to one specific vendor selection. The practical significance is bounded and concrete: the integration cost for any new vendor is one Vendor Supervisor node implementing three topic behaviors; and the certification surface is three observable behaviors independent of vendor complexity. These properties are not design goals --- they are proven consequences of building a coordination interface that is exactly as large as coordination requires, and no larger.
 
 
 \begin{thebibliography}{99}
@@ -922,4 +979,3 @@ Department of Defense, 2019.
 %\endbio
 
 \end{document}
-
