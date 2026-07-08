@@ -1,0 +1,23 @@
+The Precise Research Claim
+Here is what makes this defensible as a research contribution rather than just an interesting demo:
+
+The three-channel contract is the stable interface between the reasoning layer and the execution layer.
+
+Whatever the LLM produces, it must pass through that interface. And because of your four theorems, you know exactly what the execution layer guarantees regardless of what comes in — fault containment, proprietary confinement, independent substitutability.
+
+So the claim becomes:
+
+"LLM-generated plans are inherently unverifiable for correctness, but when the execution layer enforces a minimal formal interface, the consequences of an incorrect plan are structurally bounded. A hallucinated route can cause a physical mistake; it cannot cascade into a system-wide failure or corrupt a peer vendor domain."
+
+That is a safety guarantee on LLM-driven manufacturing that no prior work can make, because no prior work had the formal execution layer to make it against. Your JMS paper proves the execution layer. This next paper sits on top of it.
+
+The Honest Gap to Acknowledge
+The one thing you need to handle carefully: the LLM can generate a physically impossible route. It might route a part through R3 to reach D12 even though your table says R3's drop positions are D17 and D18 only.
+
+There are two ways to handle this:
+
+Option A — Validate before execute. Write a simple graph traversal checker that takes the LLM output and verifies every step is physically connected in the table before sending it to the trajectory queue. This is maybe 50 lines of Python. The LLM generates, the validator either accepts or asks the LLM to try again.
+
+Option B — Make it a research question. How often does a well-prompted LLM hallucinate physically invalid routes when given a precise structured table as context? Measure it. That measurement itself is a contribution — it tells the manufacturing community how much they can trust LLM planners on structured factory graphs.
+
+Option A makes the system robust. Option B makes the system a paper. You probably want both.
