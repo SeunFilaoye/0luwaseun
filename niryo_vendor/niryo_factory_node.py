@@ -85,6 +85,23 @@ class NiryoFactoryNode(Node):
         self.acl = FaultRegistry("niryo")
         self._fault_violation_pub = None  # set after _setup_topics
 
+        # ----------------------------------------------------
+        # CV state — R2 / R3 / R5 / R6
+        # ----------------------------------------------------
+        self.cv_robot_ids = (2, 3, 5, 6)
+
+        self.latest_cv_detections = {
+            robot_id: None
+            for robot_id in self.cv_robot_ids
+        }
+
+        self.latest_cv_detection_times = {
+            robot_id: 0.0
+            for robot_id in self.cv_robot_ids
+        }
+
+        self.cv_detection_subs = []
+
         # Setup communication
         self._setup_topics()
 
@@ -194,6 +211,24 @@ class NiryoFactoryNode(Node):
         # IR trigger subscriptions removed — conveyor_factory_node now owns
         # IR relay to superfactory. niryo_factory only handles robots.
 
+        # CV detection subscribers for CV-enabled robots.
+        for robot_id in self.cv_robot_ids:
+            topic = f'/robot{robot_id}/cv_detection'
+
+            sub = self.create_subscription(
+                String,
+                topic,
+                lambda msg, rid=robot_id: self._on_cv_detection(rid, msg),
+                10,
+                callback_group=self.concurrent_group
+            )
+
+            self.cv_detection_subs.append(sub)
+
+            self.get_logger().info(
+                f"CV subscriber ready: R{robot_id} <- {topic}"
+            )
+
         # Global status publisher (factory → external)
         self.global_status_pub = self.create_publisher(String, '/niryo_factory/status', 10)
 
@@ -215,6 +250,56 @@ class NiryoFactoryNode(Node):
             self.get_logger().info(f"   Subscribing to IR triggers: {topics}")
 
     # ==================== CALLBACK HANDLERS ====================
+
+    def _on_cv_detection(self, robot_id: int, msg):
+        """Store the latest valid CV localization for one robot."""
+        try:
+            detection = json.loads(msg.data)
+
+            required = (
+                'class',
+                'confidence',
+                'pixel_x',
+                'pixel_y',
+                'robot_x',
+                'robot_y',
+            )
+
+            missing = [
+                field for field in required
+                if field not in detection
+            ]
+
+            if missing:
+                self.get_logger().warn(
+                    f"R{robot_id} CV detection missing fields: {missing}"
+                )
+                return
+
+            payload_robot_id = detection.get('robot_id')
+
+            if payload_robot_id is not None:
+                if int(payload_robot_id) != robot_id:
+                    self.get_logger().error(
+                        f"R{robot_id} CV topic received payload for "
+                        f"robot_id={payload_robot_id}; ignoring"
+                    )
+                    return
+
+            self.latest_cv_detections[robot_id] = detection
+            self.latest_cv_detection_times[robot_id] = time.time()
+
+            self.get_logger().info(
+                f"CV R{robot_id}: {detection['class']} "
+                f"conf={float(detection['confidence']):.2f} "
+                f"XY=({float(detection['robot_x']):.4f}, "
+                f"{float(detection['robot_y']):.4f})"
+            )
+
+        except Exception as e:
+            self.get_logger().error(
+                f"R{robot_id} CV detection error: {e}"
+            )
 
     def _on_ack_received(self, robot_id: str, msg):
         """
@@ -489,11 +574,21 @@ class NiryoFactoryNode(Node):
     def _run_robot_command(self, robot_id: str, robot_id_str: str, command: str):
         """Execute a pick/place command on a single robot and publish per-robot completion."""
         try:
-            self.robot_status[robot_id] = 'EXECUTING'
             # Clear event BEFORE sending so a stale IDLE from a previous command
             # cannot cause _wait_for_robot_done to return immediately.
             self.robot_idle_events[robot_id].clear()
-            self._send_command_to_robot(robot_id, command)
+
+            if not self._send_command_to_robot(robot_id, command):
+                self.robot_status[robot_id] = 'IDLE'
+                self.robot_idle_events[robot_id].set()
+
+                self._publish_global_status(
+                    f"COMMAND_FAILED:{robot_id_str}:NO_FRESH_CV"
+                )
+                return
+
+            self.robot_status[robot_id] = 'EXECUTING'
+
             self._wait_for_robot_done(robot_id)
             self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
         except Exception as e:
@@ -555,21 +650,75 @@ class NiryoFactoryNode(Node):
 
     def _send_command_to_robot(self, robot_id: str, command: str):
         """
-        Send command to specific robot via topic.
+        Send command to a robot.
 
-        Args:
-            robot_id: Robot identifier ('robot_1', 'robot_2', etc.)
-            command: Command string
+        R1/R4 retain the original plain-string command format.
+        CV pick/place commands for R2/R3/R5/R6 are wrapped with
+        the latest fresh CV localization.
         """
         if robot_id not in self.command_publishers:
-            self.get_logger().error(f"❌ Unknown robot: {robot_id}")
-            return
+            self.get_logger().error(f"Unknown robot: {robot_id}")
+            return False
+
+        outgoing = command
+
+        try:
+            robot_num = int(robot_id.split('_')[1])
+        except (ValueError, IndexError):
+            self.get_logger().error(
+                f"Invalid internal robot identifier: {robot_id}"
+            )
+            return False
+
+        is_pick_place = (
+            '|' in command
+            and 'PICKUP' in command.upper()
+            and 'DROP' in command.upper()
+        )
+
+        if robot_num in self.cv_robot_ids and is_pick_place:
+            detection = self.latest_cv_detections.get(robot_num)
+            detection_time = self.latest_cv_detection_times.get(
+                robot_num, 0.0
+            )
+
+            detection_age = time.time() - detection_time
+
+            # Fail-safe: CV robots never fall back to a fixed pickup.
+            if detection is None or detection_age > 2.5:
+                self.get_logger().warn(
+                    f"R{robot_num}: no fresh CV target. "
+                    f"Command not sent. Detection age={detection_age:.2f}s"
+                )
+                return False
+
+            envelope = {
+                'cmd': command,
+                'cv_pick': True,
+                'cv_x': float(detection['robot_x']),
+                'cv_y': float(detection['robot_y']),
+                'cv_class': detection['class'],
+                'cv_confidence': float(detection['confidence']),
+            }
+
+            outgoing = json.dumps(envelope)
+
+            self.get_logger().info(
+                f"R{robot_num}: attaching CV target "
+                f"XY=({envelope['cv_x']:.4f}, "
+                f"{envelope['cv_y']:.4f}) "
+                f"age={detection_age:.2f}s"
+            )
 
         msg = String()
-        msg.data = command
+        msg.data = outgoing
         self.command_publishers[robot_id].publish(msg)
 
-        self.get_logger().info(f"📤 Sent to {robot_id}: {command}")
+        self.get_logger().info(
+            f"Sent command to {robot_id}: {command}"
+        )
+
+        return True
 
     def _wait_for_robot_done(self, robot_id: str, timeout: float = 120.0):
         """

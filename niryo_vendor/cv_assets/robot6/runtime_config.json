@@ -1,0 +1,7 @@
+{
+    "robot_id": 6,
+    "cv_x_offset": 0.0,
+    "cv_y_offset": 0.0,
+    "validated_pick_place": false,
+    "notes": "Offsets pending integrated CV validation."
+}

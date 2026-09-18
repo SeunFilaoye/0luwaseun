@@ -24,6 +24,8 @@ State Machine:
 import rclpy
 import time
 import sys
+import json
+from pathlib import Path
 from threading import Lock
 from std_msgs.msg import String
 
@@ -73,6 +75,69 @@ class NiryoRobotController(BaseRobot):
         # Current task data
         self.current_task = None
         self.task_start_time = None
+
+        # ----------------------------------------------------
+        # CV configuration
+        # ----------------------------------------------------
+        self.cv_enabled = self.robot_id in (2, 3, 5, 6)
+        self.cv_pick_reference = None
+
+        # Freshly recalibrated workspaces start with no XY correction.
+        # Add robot-specific offsets only if live CV pickup testing proves
+        # that a correction is still required.
+        self.cv_x_offset = 0.0
+        self.cv_y_offset = 0.0
+
+        # Robot-specific runtime corrections are stored persistently
+        # with the robot's CV assets.
+        if self.cv_enabled:
+            runtime_config_path = (
+                Path(__file__).resolve().parent
+                / "cv_assets"
+                / f"robot{self.robot_id}"
+                / "runtime_config.json"
+            )
+
+            if runtime_config_path.exists():
+                with runtime_config_path.open("r", encoding="utf-8") as f:
+                    runtime_config = json.load(f)
+
+                self.cv_x_offset = float(
+                    runtime_config.get("cv_x_offset", 0.0)
+                )
+                self.cv_y_offset = float(
+                    runtime_config.get("cv_y_offset", 0.0)
+                )
+
+        if self.cv_enabled:
+            cv_reference_path = (
+                Path(__file__).resolve().parent
+                / "cv_assets"
+                / f"robot{self.robot_id}"
+                / "calibration"
+                / "pick_reference.json"
+            )
+
+            if not cv_reference_path.exists():
+                raise FileNotFoundError(
+                    f"Robot R{self.robot_id}: "
+                    f"CV calibration file not found: {cv_reference_path}"
+                )
+
+            with cv_reference_path.open("r", encoding="utf-8") as f:
+                self.cv_pick_reference = json.load(f)
+
+            self.get_logger().info(
+                f"Robot R{self.robot_id}: CV calibration loaded from "
+                f"{cv_reference_path}"
+            )
+            self.get_logger().info(
+                f"Robot R{self.robot_id}: "
+                f"hover_z={self.cv_pick_reference['hover_z']:.4f}, "
+                f"contact_z={self.cv_pick_reference['contact_z']:.4f}, "
+                f"XY offset=({self.cv_x_offset:.4f}, "
+                f"{self.cv_y_offset:.4f})"
+            )
 
         # Setup robot-specific communication
         self.setup_communication()
@@ -189,14 +254,55 @@ class NiryoRobotController(BaseRobot):
         Args:
             msg (String): Task command message
         """
-        command = msg.data.strip()
+        raw_command = msg.data.strip()
+        command = raw_command
+        cv_payload = {}
+
+        # CV robots may receive a JSON envelope from niryo_factory.
+        # The original command remains unchanged inside the envelope.
+        try:
+            payload = json.loads(raw_command)
+
+            if isinstance(payload, dict) and 'cmd' in payload:
+                command = str(payload['cmd']).strip()
+                cv_payload = payload
+
+        except (json.JSONDecodeError, TypeError):
+            pass
 
         self.get_logger().info(f"📥 COMMAND RECEIVED: {command}")
 
-        # Send ACK immediately
+        # Preserve ACK semantics using the original factory command.
         self.publish_ack(command)
 
         current_state = self.get_state()
+
+        # Diagnostic CV contact-only test.
+        # Expected JSON envelope:
+        # {"cmd":"CV_CONTACT_TEST","cv_x":...,"cv_y":...}
+        if command.upper() == 'CV_CONTACT_TEST':
+            if not self.cv_enabled:
+                self.get_logger().error(
+                    f"Robot R{self.robot_id}: CV contact test requested on non-CV robot"
+                )
+                return
+
+            try:
+                task_data = {
+                    'task_id': f"cv_contact_{int(time.time())}",
+                    'cv_x': float(cv_payload['cv_x']),
+                    'cv_y': float(cv_payload['cv_y']),
+                }
+            except (KeyError, TypeError, ValueError) as e:
+                self.get_logger().error(
+                    f"Robot R{self.robot_id}: Invalid CV contact test payload: {e}"
+                )
+                return
+
+            self.current_task = task_data
+            self.task_start_time = time.time()
+            self.add_message_to_queue('cv_contact_test', task_data)
+            return
 
         # Check if it's an initialization command
         if command.upper() == 'INITIALIZE':
@@ -228,6 +334,33 @@ class NiryoRobotController(BaseRobot):
                 task_data = self._parse_pick_place_command(command)
 
                 if task_data:
+                    # CV-enabled robots must receive live coordinates.
+                    # Never silently fall back to their fixed Pxx pickup.
+                    if self.cv_enabled:
+                        if not cv_payload.get('cv_pick', False):
+                            self.get_logger().error(
+                                f"Robot R{self.robot_id}: "
+                                f"CV pickup command received without CV coordinates"
+                            )
+                            return
+
+                        try:
+                            task_data['cv_pick'] = True
+                            task_data['cv_x'] = float(cv_payload['cv_x'])
+                            task_data['cv_y'] = float(cv_payload['cv_y'])
+                            task_data['cv_class'] = cv_payload.get(
+                                'cv_class'
+                            )
+                            task_data['cv_confidence'] = float(
+                                cv_payload.get('cv_confidence', 0.0)
+                            )
+                        except (KeyError, TypeError, ValueError) as e:
+                            self.get_logger().error(
+                                f"Robot R{self.robot_id}: "
+                                f"Invalid CV command payload: {e}"
+                            )
+                            return
+
                     self.current_task = task_data
                     self.task_start_time = time.time()
 
@@ -393,6 +526,99 @@ class NiryoRobotController(BaseRobot):
             'vacuum_events': vacuum_events
         }
 
+    def execute_cv_contact_test(self, task):
+        """
+        Diagnostic only:
+        CV view -> hover -> contact -> hover -> CV view.
+        No vacuum and no drop motion.
+        """
+        raw_x = float(task['cv_x'])
+        raw_y = float(task['cv_y'])
+
+        cv_x = raw_x + self.cv_x_offset
+        cv_y = raw_y + self.cv_y_offset
+
+        hover = self.cv_pick_reference['hover_pose']
+        contact = self.cv_pick_reference['contact_pose']
+
+        success = False
+
+        self.get_logger().info(
+            f"Robot R{self.robot_id}: CV CONTACT TEST "
+            f"rawXY=({raw_x:.4f}, {raw_y:.4f}) "
+            f"finalXY=({cv_x:.4f}, {cv_y:.4f})"
+        )
+
+        try:
+            self.set_state(
+                self.STATE_MOVING_TO_PICKUP,
+                "CV contact test: hover"
+            )
+
+            if not self.move_to_pose(
+                cv_x,
+                cv_y,
+                float(hover['z']),
+                float(hover['roll']),
+                float(hover['pitch']),
+                float(hover['yaw']),
+                "CV contact-test hover"
+            ):
+                return False
+
+            self.set_state(
+                self.STATE_PICKING,
+                "CV contact test: contact"
+            )
+
+            if not self.move_to_pose(
+                cv_x,
+                cv_y,
+                float(contact['z']),
+                float(contact['roll']),
+                float(contact['pitch']),
+                float(contact['yaw']),
+                "CV contact-test contact"
+            ):
+                return False
+
+            self.get_logger().info(
+                "CONTACT POSE REACHED — holding 2 seconds"
+            )
+            time.sleep(2.0)
+
+            if not self.move_to_pose(
+                cv_x,
+                cv_y,
+                float(hover['z']),
+                float(hover['roll']),
+                float(hover['pitch']),
+                float(hover['yaw']),
+                "CV contact-test retreat"
+            ):
+                return False
+
+            success = True
+            return True
+
+        finally:
+            self.set_state(
+                self.STATE_RETURNING_HOME,
+                "CV contact test: returning to view"
+            )
+
+            if not self.move_to_position('cv_view_joints'):
+                self.get_logger().error(
+                    f"Robot R{self.robot_id}: "
+                    "CV contact test could not return to view"
+                )
+                success = False
+            else:
+                self.set_state(
+                    self.STATE_IDLE,
+                    "CV contact test complete"
+                )
+
     def execute_task(self, task):
         """
         Execute complete pick-and-place task.
@@ -426,6 +652,203 @@ class NiryoRobotController(BaseRobot):
         pregrip_pos = f'pregrip_{pickup_pos}'
 
         try:
+            # ==================================================
+            # CV PICKUP PATH — R2 / R3 / R5 / R6
+            # ==================================================
+            if self.cv_enabled and task.get('cv_pick', False):
+
+                if self.cv_pick_reference is None:
+                    self.set_state(
+                        self.STATE_ERROR,
+                        f"Robot R{self.robot_id}: CV calibration not loaded"
+                    )
+                    return False
+
+                try:
+                    raw_cv_x = float(task['cv_x'])
+                    raw_cv_y = float(task['cv_y'])
+
+                    cv_x = raw_cv_x + self.cv_x_offset
+                    cv_y = raw_cv_y + self.cv_y_offset
+
+                    hover_pose = self.cv_pick_reference['hover_pose']
+                    contact_pose = self.cv_pick_reference['contact_pose']
+
+                    hover_z = float(hover_pose['z'])
+                    hover_roll = float(hover_pose['roll'])
+                    hover_pitch = float(hover_pose['pitch'])
+                    hover_yaw = float(hover_pose['yaw'])
+
+                    contact_z = float(contact_pose['z'])
+                    contact_roll = float(contact_pose['roll'])
+                    contact_pitch = float(contact_pose['pitch'])
+                    contact_yaw = float(contact_pose['yaw'])
+
+                except (KeyError, TypeError, ValueError) as e:
+                    self.set_state(
+                        self.STATE_ERROR,
+                        f"Invalid CV task/calibration data: {e}"
+                    )
+                    return False
+
+                self.get_logger().info(
+                    f"Robot R{self.robot_id}: CV PICK "
+                    f"rawXY=({raw_cv_x:.4f}, {raw_cv_y:.4f}) "
+                    f"finalXY=({cv_x:.4f}, {cv_y:.4f})"
+                )
+
+                # 1. Move above detected object.
+                self.set_state(
+                    self.STATE_MOVING_TO_PICKUP,
+                    "Moving to CV hover"
+                )
+
+                if not self.move_to_pose(
+                    cv_x,
+                    cv_y,
+                    hover_z,
+                    hover_roll,
+                    hover_pitch,
+                    hover_yaw,
+                    "CV hover position"
+                ):
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to move to CV hover"
+                    )
+                    return False
+
+                # 2. Lower to calibrated contact height.
+                self.set_state(
+                    self.STATE_PICKING,
+                    "Moving to CV contact"
+                )
+
+                if not self.move_to_pose(
+                    cv_x,
+                    cv_y,
+                    contact_z,
+                    contact_roll,
+                    contact_pitch,
+                    contact_yaw,
+                    "CV contact position"
+                ):
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to move to CV contact"
+                    )
+                    return False
+
+                # 3. Grip object using existing tool abstraction.
+                if not self.grip():
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to grip CV object"
+                    )
+                    return False
+
+                time.sleep(0.5)
+
+                # 4. Lift back to calibrated hover position.
+                if not self.move_to_pose(
+                    cv_x,
+                    cv_y,
+                    hover_z,
+                    hover_roll,
+                    hover_pitch,
+                    hover_yaw,
+                    "CV lift position"
+                ):
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to lift CV object"
+                    )
+                    return False
+
+                # 5. Preserve existing factory hold/transit behavior.
+                self.set_state(
+                    self.STATE_HOLDING,
+                    "CV object secured"
+                )
+
+                if 'hold_joints' in self.config:
+                    if not self.move_to_position('hold_joints'):
+                        self.set_state(
+                            self.STATE_ERROR,
+                            "Failed to move to hold position"
+                        )
+                        return False
+
+                # 6. Preserve existing SuperFactory drop location.
+                self.set_state(
+                    self.STATE_MOVING_TO_DROP,
+                    f"Moving to {drop_pos}"
+                )
+
+                if not self.move_to_position(drop_pos):
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to move to drop position"
+                    )
+                    return False
+
+                # 7. Release at the existing configured drop.
+                self.set_state(
+                    self.STATE_DROPPING,
+                    f"Dropping at {drop_pos}"
+                )
+
+                if not self.release():
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to release object"
+                    )
+                    return False
+
+                time.sleep(0.5)
+
+                if not self.tool_neutral():
+                    self.get_logger().warn(
+                        "Failed to neutralize tool"
+                    )
+
+                # 8. Return to the calibrated camera pose,
+                #    not the normal fixed-pick home pose.
+                self.set_state(
+                    self.STATE_RETURNING_HOME,
+                    "Returning to calibrated CV view"
+                )
+
+                if not self.move_to_position('cv_view_joints'):
+                    self.set_state(
+                        self.STATE_ERROR,
+                        "Failed to return to CV view"
+                    )
+                    return False
+
+                self.set_state(
+                    self.STATE_DONE,
+                    "CV task completed successfully"
+                )
+                time.sleep(0.5)
+
+                self.set_state(
+                    self.STATE_IDLE,
+                    "Ready for next CV detection"
+                )
+
+                self.get_logger().info(
+                    f"Robot R{self.robot_id}: "
+                    f"CV task {task['task_id']} completed in "
+                    f"{time.time() - self.task_start_time:.1f}s"
+                )
+
+                return True
+
+            # ==================================================
+            # EXISTING FIXED PICKUP PATH — unchanged
+            # ==================================================
+
             # Step 1: Move to pregrip position (safe approach before pickup)
             self.set_state(self.STATE_MOVING_TO_PICKUP, f"Approaching {pickup_pos} via pregrip")
             if pregrip_pos in self.config:
@@ -525,10 +948,23 @@ class NiryoRobotController(BaseRobot):
             self.tool_neutral()
             time.sleep(0.3)
 
-            # Move to home position
-            if not self.move_to_position('home_joints'):
-                self.get_logger().error(f"❌ Robot R{self.robot_id}: Failed to move to home")
-                self.set_state(self.STATE_ERROR, "Initialization failed")
+            # CV robots initialize in their calibrated camera view.
+            # R1/R4 preserve the original home behavior.
+            initialize_position = (
+                'cv_view_joints'
+                if self.cv_enabled
+                else 'home_joints'
+            )
+
+            if not self.move_to_position(initialize_position):
+                self.get_logger().error(
+                    f"Robot R{self.robot_id}: "
+                    f"Failed to move to {initialize_position}"
+                )
+                self.set_state(
+                    self.STATE_ERROR,
+                    "Initialization failed"
+                )
                 return False
 
             # Success - publish DONE before IDLE
@@ -662,8 +1098,15 @@ class NiryoRobotController(BaseRobot):
             self.tool_neutral()
             time.sleep(0.5)
 
-            # Try to return home
-            if self.move_to_position('home_joints'):
+            # CV robots recover to their calibrated camera view.
+            # Non-CV robots preserve the original home behavior.
+            recovery_position = (
+                'cv_view_joints'
+                if self.cv_enabled
+                else 'home_joints'
+            )
+
+            if self.move_to_position(recovery_position):
                 self.get_logger().info(f"Robot R{self.robot_id}: Recovery successful")
                 self.current_task = None
                 self.set_state(self.STATE_IDLE, "Recovery complete")
@@ -711,6 +1154,16 @@ class NiryoRobotController(BaseRobot):
                         else:
                             self.get_logger().warn(
                                 f"Robot R{self.robot_id}: Cannot execute task in "
+                                f"{self.get_state()} state"
+                            )
+
+                    elif message['type'] == 'cv_contact_test':
+                        if self.get_state() == self.STATE_IDLE:
+                            task = message['data']
+                            self.execute_cv_contact_test(task)
+                        else:
+                            self.get_logger().warn(
+                                f"Robot R{self.robot_id}: Cannot run CV contact test in "
                                 f"{self.get_state()} state"
                             )
 

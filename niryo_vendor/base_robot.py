@@ -390,6 +390,122 @@ class BaseRobot(Node, ABC):
             )
             return False
     
+    def move_to_pose(
+        self,
+        x,
+        y,
+        z,
+        roll,
+        pitch,
+        yaw,
+        description="target Cartesian pose",
+    ):
+        """
+        Move robot to a Cartesian XYZ + RPY pose.
+        """
+        values = [x, y, z, roll, pitch, yaw]
+
+        try:
+            values = [float(value) for value in values]
+        except (TypeError, ValueError):
+            self.get_logger().error(
+                f"Robot {self.robot_id}: Invalid Cartesian pose values"
+            )
+            return False
+
+        x, y, z, roll, pitch, yaw = values
+
+        goal = RobotMove.Goal()
+        goal.cmd.cmd_type = ArmMoveCommand.POSE
+
+        goal.cmd.position.x = x
+        goal.cmd.position.y = y
+        goal.cmd.position.z = z
+
+        goal.cmd.rpy.roll = roll
+        goal.cmd.rpy.pitch = pitch
+        goal.cmd.rpy.yaw = yaw
+
+        goal.cmd.tcp_version = ArmMoveCommand.DH_CONVENTION
+
+        self.get_logger().info(
+            f"Robot {self.robot_id}: Moving to {description} "
+            f"XYZ=({x:.4f}, {y:.4f}, {z:.4f}) "
+            f"RPY=({roll:.4f}, {pitch:.4f}, {yaw:.4f})"
+        )
+
+        try:
+            future = self.robot_move_client.send_goal_async(goal)
+
+            rclpy.spin_until_future_complete(
+                self,
+                future,
+                timeout_sec=10.0
+            )
+
+            if not future.done():
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: "
+                    f"Cartesian goal send timeout: {description}"
+                )
+                return False
+
+            handle = future.result()
+
+            if handle is None or not handle.accepted:
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: "
+                    f"Cartesian move rejected: {description}"
+                )
+                return False
+
+            result_future = handle.get_result_async()
+
+            rclpy.spin_until_future_complete(
+                self,
+                result_future,
+                timeout_sec=30.0
+            )
+
+            if not result_future.done():
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: "
+                    f"Cartesian move result timeout: {description}"
+                )
+                return False
+
+            result_wrapper = result_future.result()
+
+            if result_wrapper is None:
+                self.get_logger().error(
+                    f"Robot {self.robot_id}: "
+                    f"No result returned for Cartesian move"
+                )
+                return False
+
+            result = result_wrapper.result
+
+            if result.status == 1:
+                self.get_logger().info(
+                    f"Robot {self.robot_id}: "
+                    f"Successfully moved to {description}"
+                )
+                return True
+
+            self.get_logger().error(
+                f"Robot {self.robot_id}: "
+                f"Cartesian move failed: {description} - "
+                f"{result.message}"
+            )
+            return False
+
+        except Exception as e:
+            self.get_logger().error(
+                f"Robot {self.robot_id}: "
+                f"Cartesian move error to {description}: {e}"
+            )
+            return False
+
     def control_vacuum(self, mode):
         """
         Control vacuum gripper.
@@ -559,9 +675,23 @@ class BaseRobot(Node, ABC):
         """
         self.get_logger().info(f"Robot {self.robot_id}: Starting...")
         
-        # Move to home position
-        if not self.move_to_position('home_joints', "initial home position"):
-            self.get_logger().error(f"Robot {self.robot_id}: Failed to move to home")
+        # CV-enabled robots must start in their calibrated camera view.
+        # Non-CV robots preserve the original home position behavior.
+        startup_position = (
+            'cv_view_joints'
+            if 'cv_view_joints' in self.config
+            else 'home_joints'
+        )
+
+        if not self.move_to_position(
+            startup_position,
+            "initial CV view position"
+            if startup_position == 'cv_view_joints'
+            else "initial home position"
+        ):
+            self.get_logger().error(
+                f"Robot {self.robot_id}: Failed to move to {startup_position}"
+            )
             return False
         
         # Set tool to neutral
@@ -588,8 +718,19 @@ class BaseRobot(Node, ABC):
         # Neutral tool
         self.tool_neutral()
         
-        # Move to home
-        self.move_to_position('home_joints', "shutdown home position")
+        # Preserve the calibrated camera view for CV-enabled robots.
+        shutdown_position = (
+            'cv_view_joints'
+            if 'cv_view_joints' in self.config
+            else 'home_joints'
+        )
+
+        self.move_to_position(
+            shutdown_position,
+            "shutdown CV view position"
+            if shutdown_position == 'cv_view_joints'
+            else "shutdown home position"
+        )
         
         self.get_logger().info(f"Robot {self.robot_id}: Shutdown complete")
 

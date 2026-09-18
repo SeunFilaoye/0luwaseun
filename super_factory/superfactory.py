@@ -898,14 +898,28 @@ class SuperFactoryNode(Node):
         vendor = task['vendor']
         command = task['command']
 
-        # If this is a Niryo pickup from conveyor, wait for the conveyor to
-        # confirm it has stopped. Skip for AGV unload tasks — the AGV arrival
-        # gate already confirmed the part is present.
+        # Conveyor readiness:
+        # - R1 and R4 preserve the original IR-based gating.
+        # - R2, R3, R5 and R6 are CV-enabled and do not wait on IR.
+        #   Their downstream Niryo factory command is allowed to execute
+        #   only when a fresh CV detection is available.
+        # - AGV unload tasks keep their existing AGV-arrival gating.
         if vendor == 'niryo' and not task.get('agv_unload_vendor'):
-            ready_key = self._get_ir_ready_key_from_command(command)
-            if ready_key:
-                if not self._wait_for_ir(ready_key, timeout=complete_timeout):
-                    return False
+            task_robot_id = task.get('robot_id', '').upper()
+            cv_robot_ids = {'R2', 'R3', 'R5', 'R6'}
+
+            if task_robot_id in cv_robot_ids:
+                self.get_logger().info(
+                    f"👁 {task_robot_id}: CV-enabled pickup — skipping IR gate"
+                )
+            else:
+                ready_key = self._get_ir_ready_key_from_command(command)
+                if ready_key:
+                    if not self._wait_for_ir(
+                        ready_key,
+                        timeout=complete_timeout
+                    ):
+                        return False
 
         # Step 1 + 2: Send command and wait for completion.
         # Niryo R-robot commands use a per-robot lock so that two parallel

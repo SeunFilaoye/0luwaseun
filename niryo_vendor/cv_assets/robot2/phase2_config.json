@@ -1,0 +1,46 @@
+{
+    "config_version": 1,
+    "updated_at": "2026-07-27T19:28:48",
+    "robot_name": "Robot 3",
+    "robot_ip": "192.168.0.229",
+    "home_view_joints": [
+        0.5517,
+        0.1767,
+        -0.1265,
+        0.0108,
+        -1.623,
+        -1.0951
+    ],
+    "selection_method": "closest_valid_chip_to_priority_point",
+    "polygon_roi": [
+        [
+            82,
+            203
+        ],
+        [
+            154,
+            129
+        ],
+        [
+            240,
+            124
+        ],
+        [
+            247,
+            277
+        ],
+        [
+            154,
+            277
+        ]
+    ],
+    "priority_point": {
+        "x": 128,
+        "y": 204
+    },
+    "notes": [
+        "Only detections whose center is inside polygon_roi are valid.",
+        "Among valid detections, choose the chip closest to priority_point.",
+        "The robot camera must use the saved HOME/VIEW position."
+    ]
+}

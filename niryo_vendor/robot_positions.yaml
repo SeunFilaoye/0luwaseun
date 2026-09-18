@@ -48,6 +48,10 @@ robot_2:
     joints: [0.002, 0.596, -1.008, -0.02, -0.994, -1.15]
     description: Home position for Robot 2
     type: HOME
+  cv_view_joints:
+    joints: [0.5517, 0.1767, -0.1265, 0.0108, -1.623, -1.0951]
+    description: Calibrated CV camera view position for Robot 2
+    type: TRANSIT
   hold_joints:
     joints: [1.613, 0.016, -0.534, -0.026, -0.993, -1.152]
     description: Hold position after pickup
@@ -77,6 +81,10 @@ robot_3:
     joints: [0.0205, 0.3812, -0.8794, 0.0353, -1.1628, 0.0138]
     description: Home position for Robot 3
     type: HOME
+  cv_view_joints:
+    joints: [-1.5317, 0.0843, 0.1007, 0.0154, -1.9191, 0.1013]
+    description: Calibrated CV camera view position for Robot 3
+    type: TRANSIT
   hold_joints:
     joints: [0.576, 0.388, -0.674, -0.007, -1.161, 0.029]
     description: Hold position after pickup
@@ -159,6 +167,10 @@ robot_5:
     joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.77]
     description: Home position for Robot 5
     type: HOME
+  cv_view_joints:
+    joints: [-0.0098, 0.61, -0.4007, 0.1182, -1.916, -1.3574]
+    description: Calibrated CV camera view position for Robot 5
+    type: TRANSIT
   hold_joints:
     joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.729]
     description: Hold position after pickup
@@ -212,6 +224,10 @@ robot_6:
     joints: [0.045, 0.262, -0.879, -0.017, -1.157, -1.77]
     description: Home position for Robot 5
     type: HOME
+  cv_view_joints:
+    joints: [0.3112, 0.61, -0.2931, -0.0459, -1.8991, -1.5737]
+    description: Calibrated CV camera view position for Robot 6
+    type: TRANSIT
   hold_joints:
     joints: [1.54, 0.12, -0.634, 0.013, -1.156, -1.765]
     description: Hold position after pickup
