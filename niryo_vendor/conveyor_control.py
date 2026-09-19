@@ -344,21 +344,49 @@ class ConveyorController(Node):
 
         timestamp = time.time()
 
+        # CV robots R2/R3/R5/R6 use continuous-flow pickup.
+        # R1/R4 retain the original stop/IR/restart behavior.
+        triggers_robot = sensor_config.get('triggers_robot')
+        trigger_ids = (
+            triggers_robot
+            if isinstance(triggers_robot, list)
+            else [triggers_robot]
+        )
+        continuous_cv = any(
+            rid in {2, 3, 5, 6}
+            for rid in trigger_ids
+            if isinstance(rid, int)
+        )
+
         if current_ir_state:
-            # Object detected
-            self.get_logger().info(
-                f"🛑 Conveyor {self.conveyor_id}: Object detected on "
-                f"{sensor_config['pin']} ({direction} direction)"
-            )
-            self.request_conveyor(False)
-            self.send_ir_trigger(timestamp, sensor_config)
+            if continuous_cv:
+                self.get_logger().info(
+                    f"🎥 Conveyor {self.conveyor_id}: Object detected on "
+                    f"{sensor_config['pin']} for CV robot(s) {trigger_ids} — "
+                    f"CONTINUOUS FLOW, conveyor remains running"
+                )
+                # No conveyor stop and no legacy IR_READY trigger.
+            else:
+                # Original non-CV behavior.
+                self.get_logger().info(
+                    f"🛑 Conveyor {self.conveyor_id}: Object detected on "
+                    f"{sensor_config['pin']} ({direction} direction)"
+                )
+                self.request_conveyor(False)
+                self.send_ir_trigger(timestamp, sensor_config)
         else:
-            # Object removed
-            self.get_logger().info(
-                f"✅ Conveyor {self.conveyor_id}: Object removed from "
-                f"{sensor_config['pin']} ({direction} direction)"
-            )
-            self.request_conveyor(True)
+            if continuous_cv:
+                self.get_logger().info(
+                    f"🎥 Conveyor {self.conveyor_id}: Object cleared "
+                    f"{sensor_config['pin']} — continuous-flow conveyor still running"
+                )
+            else:
+                # Original non-CV behavior.
+                self.get_logger().info(
+                    f"✅ Conveyor {self.conveyor_id}: Object removed from "
+                    f"{sensor_config['pin']} ({direction} direction)"
+                )
+                self.request_conveyor(True)
 
         with self.state_lock:
             self.last_ir_state = current_ir_state
