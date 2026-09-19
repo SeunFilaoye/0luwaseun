@@ -677,57 +677,86 @@ class NiryoFactoryNode(Node):
         )
 
         if robot_num in self.cv_robot_ids and is_pick_place:
-            # Continuous-flow CV synchronization:
+            # Proven continuous-flow trigger behavior:
+            #   1. Arm when route command arrives.
+            #   2. Ignore detections that existed before this command.
+            #   3. Wait for a NEW chip to enter the ROI.
+            #   4. Start a 4.0 s dwell timer on first sighting.
+            #   5. Keep consuming updated detections while conveyor runs.
+            #   6. At/after dwell completion, require chip still visible.
+            #   7. Lock latest XY and dispatch pickup.
             #
-            # R2/R3/R5/R6 do NOT use the legacy IR stop gate.  A robot
-            # command may therefore arrive before the conveyed part enters
-            # that robot's camera ROI.
-            #
-            # Arm the command here and wait for a genuinely fresh CV target
-            # instead of failing immediately.  The robot still NEVER falls
-            # back to a fixed pickup position.
-            cv_wait_timeout = 20.0
-            cv_max_age = 0.75
-            wait_start = time.time()
+            # Conveyor remains ON throughout normal pickup operation.
+            cv_wait_timeout = 30.0
+            cv_ready_delay = 5.0
+            cv_visible_max_age = 0.75
 
-            self.get_logger().info(
-                f"R{robot_num}: waiting for fresh CV target "
-                f"(timeout={cv_wait_timeout:.1f}s, "
-                f"max_age={cv_max_age:.2f}s)"
-            )
+            command_armed_at = time.time()
+            wait_deadline = command_armed_at + cv_wait_timeout
 
+            first_seen_at = None
             detection = None
             detection_age = float('inf')
 
-            while (time.time() - wait_start) < cv_wait_timeout:
+            self.get_logger().info(
+                f"R{robot_num}: CV PICK ARMED - waiting for NEW ROI target "
+                f"(dwell={cv_ready_delay:.1f}s, timeout={cv_wait_timeout:.1f}s)"
+            )
+
+            while time.time() < wait_deadline:
+                now = time.time()
+
                 candidate = self.latest_cv_detections.get(robot_num)
                 candidate_time = self.latest_cv_detection_times.get(
                     robot_num, 0.0
                 )
 
-                if candidate is not None:
-                    candidate_age = time.time() - candidate_time
+                # Ignore any target that was already present before this
+                # command was armed.
+                if (
+                    first_seen_at is None
+                    and candidate is not None
+                    and candidate_time > command_armed_at
+                ):
+                    first_seen_at = candidate_time
 
-                    if candidate_age <= cv_max_age:
+                    self.get_logger().info(
+                        f"R{robot_num}: NEW ROI target detected - "
+                        f"starting {cv_ready_delay:.1f}s dwell"
+                    )
+
+                if first_seen_at is not None:
+                    detection_age = now - candidate_time
+                    dwell_elapsed = now - first_seen_at
+
+                    # Match proven FIFO behavior:
+                    # timer may finish while target is temporarily absent,
+                    # but pickup only fires once target is visible again.
+                    target_visible = (
+                        candidate is not None
+                        and candidate_time > command_armed_at
+                        and detection_age <= cv_visible_max_age
+                    )
+
+                    if dwell_elapsed >= cv_ready_delay and target_visible:
                         detection = candidate
-                        detection_age = candidate_age
+
+                        self.get_logger().info(
+                            f"R{robot_num}: ROI DWELL COMPLETE - "
+                            f"locking latest XY after {dwell_elapsed:.2f}s "
+                            f"(age={detection_age:.3f}s)"
+                        )
                         break
 
-                time.sleep(0.05)
+                time.sleep(0.02)
 
-            # Fail-safe: CV robots never fall back to a fixed pickup.
+            # Fail-safe: never use a fixed pickup fallback.
             if detection is None:
                 self.get_logger().warn(
-                    f"R{robot_num}: timed out waiting for fresh CV target. "
-                    f"Command not sent after {cv_wait_timeout:.1f}s"
+                    f"R{robot_num}: CV target timeout - "
+                    f"no visible target ready after {cv_wait_timeout:.1f}s"
                 )
                 return False
-
-            self.get_logger().info(
-                f"R{robot_num}: fresh CV target acquired after "
-                f"{time.time() - wait_start:.2f}s "
-                f"(age={detection_age:.3f}s)"
-            )
 
             envelope = {
                 'cmd': command,
