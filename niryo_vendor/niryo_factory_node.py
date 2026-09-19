@@ -677,20 +677,57 @@ class NiryoFactoryNode(Node):
         )
 
         if robot_num in self.cv_robot_ids and is_pick_place:
-            detection = self.latest_cv_detections.get(robot_num)
-            detection_time = self.latest_cv_detection_times.get(
-                robot_num, 0.0
+            # Continuous-flow CV synchronization:
+            #
+            # R2/R3/R5/R6 do NOT use the legacy IR stop gate.  A robot
+            # command may therefore arrive before the conveyed part enters
+            # that robot's camera ROI.
+            #
+            # Arm the command here and wait for a genuinely fresh CV target
+            # instead of failing immediately.  The robot still NEVER falls
+            # back to a fixed pickup position.
+            cv_wait_timeout = 20.0
+            cv_max_age = 0.75
+            wait_start = time.time()
+
+            self.get_logger().info(
+                f"R{robot_num}: waiting for fresh CV target "
+                f"(timeout={cv_wait_timeout:.1f}s, "
+                f"max_age={cv_max_age:.2f}s)"
             )
 
-            detection_age = time.time() - detection_time
+            detection = None
+            detection_age = float('inf')
+
+            while (time.time() - wait_start) < cv_wait_timeout:
+                candidate = self.latest_cv_detections.get(robot_num)
+                candidate_time = self.latest_cv_detection_times.get(
+                    robot_num, 0.0
+                )
+
+                if candidate is not None:
+                    candidate_age = time.time() - candidate_time
+
+                    if candidate_age <= cv_max_age:
+                        detection = candidate
+                        detection_age = candidate_age
+                        break
+
+                time.sleep(0.05)
 
             # Fail-safe: CV robots never fall back to a fixed pickup.
-            if detection is None or detection_age > 2.5:
+            if detection is None:
                 self.get_logger().warn(
-                    f"R{robot_num}: no fresh CV target. "
-                    f"Command not sent. Detection age={detection_age:.2f}s"
+                    f"R{robot_num}: timed out waiting for fresh CV target. "
+                    f"Command not sent after {cv_wait_timeout:.1f}s"
                 )
                 return False
+
+            self.get_logger().info(
+                f"R{robot_num}: fresh CV target acquired after "
+                f"{time.time() - wait_start:.2f}s "
+                f"(age={detection_age:.3f}s)"
+            )
 
             envelope = {
                 'cmd': command,
