@@ -688,7 +688,7 @@ class NiryoFactoryNode(Node):
             #
             # Conveyor remains ON throughout normal pickup operation.
             cv_wait_timeout = 30.0
-            cv_ready_delay = 5.0
+            cv_ready_delay = 5.75
             cv_visible_max_age = 0.75
 
             command_armed_at = time.time()

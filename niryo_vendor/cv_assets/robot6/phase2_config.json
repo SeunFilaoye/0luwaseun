@@ -14,24 +14,24 @@
     "selection_method": "closest_valid_chip_to_priority_point",
     "polygon_roi": [
         [
-            9,
-            204
+            5,
+            206
         ],
         [
-            120,
-            161
+            115,
+            162
         ],
         [
-            196,
-            186
+            149,
+            179
         ],
         [
-            142,
-            337
+            88,
+            318
         ],
         [
-            45,
-            304
+            29,
+            300
         ]
     ],
     "priority_point": {
