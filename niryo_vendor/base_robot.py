@@ -37,6 +37,7 @@ from abc import ABC, abstractmethod
 from niryo_ned_ros2_interfaces.srv import ToolCommand
 from niryo_ned_ros2_interfaces.action import RobotMove
 from niryo_ned_ros2_interfaces.msg import ArmMoveCommand
+from sensor_msgs.msg import JointState
 
 
 class BaseRobot(Node, ABC):
@@ -72,6 +73,11 @@ class BaseRobot(Node, ABC):
         self.shutdown_event = Event()
         self.message_queue = deque()
         self.queue_lock = Lock()
+        self.joint_state_lock = Lock()
+        self.latest_joint_positions = None
+        self.latest_joint_state_at = 0.0
+        self.joint_state_subscription = self.create_subscription(
+            JointState, f'/{self.namespace}/joint_states', self.joint_state_callback, 10)
         
         # QoS profile for reliable communication
         self.qos_profile = QoSProfile(
@@ -98,6 +104,23 @@ class BaseRobot(Node, ABC):
             raise RuntimeError(f"Robot {robot_id}: Failed to connect to hardware services")
         
         self.get_logger().info(f"Robot {robot_id} base initialization complete")
+
+    def joint_state_callback(self, message):
+        names=('joint_1','joint_2','joint_3','joint_4','joint_5','joint_6')
+        positions=dict(zip(message.name,message.position))
+        if not all(name in positions for name in names):return
+        with self.joint_state_lock:
+            self.latest_joint_positions=[float(positions[name]) for name in names]
+            self.latest_joint_state_at=time.monotonic()
+
+    def is_at_joint_target(self, target, tolerance=0.08, max_age=1.5):
+        """Avoid a redundant startup move when a fresh encoder sample is already at target."""
+        with self.joint_state_lock:
+            current=self.latest_joint_positions
+            age=time.monotonic()-self.latest_joint_state_at
+        return (current is not None and age<=max_age and len(target)==6
+                and all(abs(float(actual)-float(expected))<=tolerance
+                        for actual,expected in zip(current,target)))
     
     def load_robot_configuration(self, robot_id, config_path=None):
         """
@@ -551,6 +574,11 @@ class BaseRobot(Node, ABC):
                     f"Robot {self.robot_id}: Vacuum {mode} service timeout (service unresponsive)"
                 )
                 return False
+            result = future.result()
+            expected_state = 32 if mode == 'pull' else 33
+            if result is None or result.state != expected_state:
+                self.get_logger().error(f"Robot {self.robot_id}: vacuum rejected; state={getattr(result, 'state', None)}")
+                return False
             self.get_logger().info(f"Robot {self.robot_id}: Vacuum {mode} command sent")
             return True
         except Exception as e:
@@ -595,6 +623,11 @@ class BaseRobot(Node, ABC):
                 self.get_logger().error(
                     f"Robot {self.robot_id}: Gripper {mode} service timeout (service unresponsive)"
                 )
+                return False
+            result = future.result()
+            expected_state = 17 if mode == 'close' else 16
+            if result is None or result.state != expected_state:
+                self.get_logger().error(f"Robot {self.robot_id}: gripper rejected; state={getattr(result, 'state', None)}")
                 return False
             self.get_logger().info(f"Robot {self.robot_id}: Gripper {mode} command sent")
             return True
@@ -707,34 +740,20 @@ class BaseRobot(Node, ABC):
         return True
     
     def shutdown(self):
-        """
-        Graceful shutdown of robot system.
-        
-        Stops operations, neutralizes vacuum, and returns to home.
-        """
-        self.get_logger().info(f"Robot {self.robot_id}: Shutting down...")
+        """Stop the arm without releasing a held chip or executing a home move."""
         self.shutdown_event.set()
-        
-        # Neutral tool
-        self.tool_neutral()
-        
-        # Preserve the calibrated camera view for CV-enabled robots.
-        shutdown_position = (
-            'cv_view_joints'
-            if 'cv_view_joints' in self.config
-            else 'home_joints'
-        )
-
-        self.move_to_position(
-            shutdown_position,
-            "shutdown CV view position"
-            if shutdown_position == 'cv_view_joints'
-            else "shutdown home position"
-        )
-        
-        self.get_logger().info(f"Robot {self.robot_id}: Shutdown complete")
-
-
-if __name__ == '__main__':
-    print("BaseRobot is an abstract base class and cannot be run directly.")
-    print("Use a concrete implementation like NiryoRobotController instead.")
+        try:
+            if not rclpy.ok():
+                self.get_logger().warn('ROS context closed; use cvctl stop or the physical stop to confirm hardware stopped')
+                return
+            from niryo_ned_ros2_interfaces.srv import Trigger
+            client = self.create_client(Trigger, f'/{self.namespace}/niryo_robot_arm_commander/stop_command')
+            if not client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().error('Arm stop service unavailable; use physical stop')
+                return
+            future = client.call_async(Trigger.Request())
+            rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+            if not future.done() or future.result().status <= 0:
+                self.get_logger().error('Arm stop unconfirmed; use physical stop')
+        except Exception as exc:
+            self.get_logger().error(f'Arm stop unconfirmed: {exc}')

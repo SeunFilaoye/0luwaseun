@@ -344,7 +344,7 @@ class ConveyorController(Node):
 
         timestamp = time.time()
 
-        # CV robots R2/R3/R5/R6 use continuous-flow pickup.
+        # Logical CV robots R2/R3/R5/R6 use continuous-flow pickup. Physical CV robots are 2/4/5/6.
         # R1/R4 retain the original stop/IR/restart behavior.
         triggers_robot = sensor_config.get('triggers_robot')
         trigger_ids = (
@@ -579,4 +579,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

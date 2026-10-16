@@ -92,7 +92,7 @@ robot_3:
   description: "Processing robot on C3 path - receives from R2, sends to R5 via C5"
 
 robot_4:
-  # Processing Robot R4 (C2 path)
+  # Processing Robot R4 (old R4 station, C5/C6 path)
   capabilities:
     - pick
     - place
@@ -101,21 +101,21 @@ robot_4:
   workspace_positions:
     - home_joints
     - hold_joints
-    - P11  # Pickup from C2
-    - P12  # Pickup from C4
-    - P13  # Pickup from VB (vertical buffer)
-    - D11  # Drop to C2
-    - D12  # Drop to C4
-    - D13  # Drop to VB
+    - P15  # Pickup from C5
+    - P16  # Pickup from C6
+    - P12  # Pickup from AGV node D
+    - D16  # Drop to C6
+    - D12  # Drop to red bin
+    - D13  # Drop to vertical buffer
     - camera_joints_P11
     - camera_joints_P12
     - camera_joints_P13
   conveyors_accessible:
-    - C2  # Input from R2
-    - C4  # Output to R5
+    - C5  # Input from R1
+    - C6  # Output to R5
   max_payload: 0.3  # kg
   role: "processor"
-  description: "Processing robot on C2 path - receives from R2, sends to R5 via C4"
+  description: "Replacement R4 at old R4 station - receives from R1, sends to R5 via C6"
 
 robot_5:
   # Processing Robot R4 (C2 path)

@@ -1,0 +1,18 @@
+/**:
+  ros__parameters:
+    topic_whitelist:
+      - /niryo_robot_hardware_interface/hardware_status
+      - /niryo_robot/robot_state
+      - /joint_states
+      - /niryo_robot_vision/compressed_video_stream
+      - /niryo_robot_rpi/digital_io_state
+      - /niryo_robot/conveyor/feedback
+    service_whitelist:
+      - /niryo_robot/tools/.*
+      - /niryo_robot_tools_commander/.*
+      - /niryo_robot_arm_commander/.*
+      - /niryo_robot/conveyor/.*
+      - /niryo_robot_rpi/get_digital_io
+    action_whitelist:
+      - /niryo_robot_arm_commander/robot_action
+      - /niryo_robot_tools_commander/action_server

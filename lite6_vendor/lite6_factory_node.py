@@ -63,6 +63,9 @@ class Lite6FactoryNode(Node):
             'xarm2': 'UNKNOWN'
         }
 
+        self.done_events = {r: threading.Event() for r in self.robot_status}
+        self.command_failed = set()
+
         # Track acknowledgments
         self.robot_acks = {
             'xarm1': None,
@@ -177,6 +180,11 @@ class Lite6FactoryNode(Node):
         """
         status = msg.data
         self.robot_status[robot_id] = status
+        if status == 'ERROR':
+            self.command_failed.add(robot_id)
+            self.done_events[robot_id].set()
+        elif status == 'DONE':
+            self.done_events[robot_id].set()
         self.get_logger().info(f"📊 [{robot_id}] STATUS: {status}")
 
         # Forward READY status to superfactory for AGV handoff
@@ -423,11 +431,13 @@ class Lite6FactoryNode(Node):
         self.get_logger().info(f"🎯 {robot_id.upper()} executing pick/place")
         self._publish_global_status(f"{robot_id.upper()}_EXECUTING")
 
+        self.done_events[robot_id].clear()
+        self.command_failed.discard(robot_id)
+        self.robot_status[robot_id] = 'DISPATCHED'
         self._send_command_to_robot(robot_id, command)
-        self._wait_for_robot_done(robot_id)
-
-        # Per-robot completion signal (e.g. COMMAND_COMPLETE:XARM1)
-        self._publish_global_status(f"COMMAND_COMPLETE:{robot_id.upper()}")
+        success = self._wait_for_robot_done(robot_id)
+        outcome = 'COMMAND_COMPLETE' if success else 'COMMAND_FAILED'
+        self._publish_global_status(f'{outcome}:{robot_id.upper()}')
 
     def _parse_robot_id(self, robot_id_str: str) -> str:
         """
@@ -515,25 +525,8 @@ class Lite6FactoryNode(Node):
         """
         self.get_logger().info(f"⏳ Waiting for {robot_id} to complete...")
         
-        start_time = time.time()
-        
-        while True:
-            # Check if done
-            if self.robot_status[robot_id] == 'DONE':
-                self.get_logger().info(f"✅ {robot_id} completed task")
-                
-                # Wait for robot to transition to IDLE
-                time.sleep(0.5)
-                break
-            
-            # Check timeout
-            if time.time() - start_time > timeout:
-                self.get_logger().error(f"⏱️ Timeout waiting for {robot_id}")
-                break
-            
-            # Sleep briefly
-            time.sleep(0.1)
-    
+        return self.done_events[robot_id].wait(timeout) and robot_id not in self.command_failed
+
     def _publish_global_status(self, status: str):
         """Publish global factory status."""
         msg = String()

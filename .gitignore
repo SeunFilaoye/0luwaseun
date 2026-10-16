@@ -46,3 +46,10 @@ ENV/
 
 # Claude
 .claude/
+
+# Local runtime state and thesis experiment logs
+thesis_cv/runs/
+thesis_cv/.state/
+
+# Local rollback copies; canonical source is tracked in Git
+*.backup_*

@@ -1,0 +1,101 @@
+{
+  "ros_domain_id": 0,
+  "session": "thesis-cv",
+  "niryo_ips": {
+    "1": "192.168.0.150",
+    "2": "ned2-f9-30e-c2c.local",
+    "3": "192.168.0.223",
+    "5": "ned2-2a-047-144.local",
+    "6": "ned2-8d-24d-5f2.local",
+    "4": "192.168.0.227"
+  },
+  "xarm_ips": {
+    "1": "192.168.0.170",
+    "2": "192.168.0.183"
+  },
+  "cv": {
+    "confidence": 0.5,
+    "dwell_seconds": 5.75,
+    "max_frame_age": 1.5,
+    "wait_timeout": 30.0,
+    "match_distance_pixels": 55,
+    "gpu_by_robot": {
+      "2": "0",
+      "3": "1",
+      "5": "0",
+      "6": "1"
+    }
+  },
+  "r1_wiring_verified": false,
+  "r1_wiring_evidence": {
+    "operator_attested": true,
+    "method": "2026-10-15 operator confirmed in Niryo Studio: C1 sensor DI3, C2 sensor DI5",
+    "sensor_edge_test": "Operator identified inputs; corrected configuration awaits physical recheck",
+    "conveyors": {
+      "C1": 9,
+      "C2": 10
+    },
+    "sensor_pins": {
+      "C1": "DI3",
+      "C2": "DI5"
+    }
+  },
+  "pickups": {
+    "R1:P11": {
+      "mode": "fixed",
+      "source": "conveyor1"
+    },
+    "R1:P12": {
+      "mode": "fixed",
+      "source": "conveyor2"
+    },
+    "R2:P13": {
+      "mode": "cv",
+      "source": "conveyor3",
+      "asset_dir": "niryo_vendor/cv_assets/robot2"
+    },
+    "R2:P15": {
+      "mode": "disabled",
+      "source": "conveyor5",
+      "note": "R2 uses its calibrated C3/P13 ROI. C5/P15 belongs to R4."
+    },
+    "R3:P14": {
+      "mode": "cv",
+      "source": "conveyor4",
+      "asset_dir": "niryo_vendor/cv_assets/robot3"
+    },
+    "R4:P15": {
+      "mode": "fixed",
+      "source": "conveyor5",
+      "trigger": "ir"
+    },
+    "R4:P12": {
+      "mode": "fixed",
+      "source": "agv2_D"
+    },
+    "R5:P17": {
+      "mode": "cv",
+      "source": "conveyor7",
+      "asset_dir": "niryo_vendor/cv_assets/robot5"
+    },
+    "R5:P13": {
+      "mode": "cv",
+      "source": "agv_E",
+      "asset_dir": "niryo_vendor/cv_assets/robot5/workspaces/P13",
+      "note": "Requires a separately taught camera view and pixel-to-robot calibration. Never use fixed pickup fallback."
+    },
+    "R6:P18": {
+      "mode": "cv",
+      "source": "conveyor8",
+      "asset_dir": "niryo_vendor/cv_assets/robot6"
+    },
+    "R6:P12": {
+      "mode": "cv",
+      "source": "agv_D",
+      "asset_dir": "niryo_vendor/cv_assets/robot6/workspaces/P12",
+      "note": "Requires a separately taught camera view and pixel-to-robot calibration. Never use fixed pickup fallback."
+    }
+  },
+  "unavailable_roles": [],
+  "unavailable_role_notes": "Logical R3 is the physical Robot 4 moved to 192.168.0.223. Logical R4 is the new robot at the former Robot 4 station, 192.168.0.227. R7 is not part of this testbed."
+}

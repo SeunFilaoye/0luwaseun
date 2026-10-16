@@ -143,7 +143,8 @@ class ConveyorFactoryNode(Node):
                 robot_ids = [triggers_robot]
 
             for rid in robot_ids:
-                status = f"IR_READY | R{rid} | {pickup_position} | C{conveyor_id}"
+                event = "IR_READY" if data.get("active", True) else "IR_CLEAR"
+                status = f"{event} | R{rid} | {pickup_position} | C{conveyor_id}"
                 self._publish_status(status)
                 self.get_logger().info(
                     f"📡 IR forwarded to superfactory: {status}"

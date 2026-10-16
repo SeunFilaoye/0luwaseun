@@ -1,0 +1,10 @@
+# Read-only R7 diagnostics: hardware status, IR inputs and conveyor identity.
+# No conveyor control, tool, arm command or action interface is exposed.
+/**:
+  ros__parameters:
+    topic_whitelist:
+      - "/niryo_robot_hardware_interface/hardware_status"
+      - "/niryo_robot_rpi/digital_io_state"
+    service_whitelist:
+      - "/niryo_robot/conveyor/get_hardware_id"
+    action_whitelist: []

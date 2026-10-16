@@ -1,0 +1,7 @@
+# Temporary read-only commissioning bridge for logical R7.
+# This file is intentionally separate from the multi-robot driver list.
+rosbridge_port: 9090
+robot_namespaces:
+  - "robot7"
+robot_ips:
+  - "192.168.0.222"

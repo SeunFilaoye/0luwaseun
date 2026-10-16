@@ -22,13 +22,16 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from std_msgs.msg import String
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from thesis_cv.policy import pickup_mode, parse_pick, TargetGate, settings, validate_detection, workspace
 import threading
 import time
 from queue import Queue
 import yaml
 import os
 import json
-import sys
 
 # Fault containment registry
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fault_containment'))
@@ -72,6 +75,11 @@ class NiryoFactoryNode(Node):
             self.robot_idle_events[f'robot_{robot_id}'] = threading.Event()
 
         # Track acknowledgments
+        self.cv_ready_events = {}
+        self.cv_requested_pickups = {}
+        self.workspace_publishers = {}
+        self.robot_done_seen = set()
+        self.robot_failures = {}
         self.robot_acks = {}
         for robot_id in self.robot_ids:
             self.robot_acks[f'robot_{robot_id}'] = None
@@ -86,7 +94,7 @@ class NiryoFactoryNode(Node):
         self._fault_violation_pub = None  # set after _setup_topics
 
         # ----------------------------------------------------
-        # CV state — R2 / R3 / R5 / R6
+        # CV state — logical R2 / R3 / R5 / R6 (physical robots 2, 4, 5, 6)
         # ----------------------------------------------------
         self.cv_robot_ids = (2, 3, 5, 6)
 
@@ -145,8 +153,9 @@ class NiryoFactoryNode(Node):
 
         except Exception as e:
             self.get_logger().error(f"❌ Failed to load config: {e}")
-            # Default to 6 robots
-            self.robot_ids = [1, 2, 3, 4, 5, 6]
+            # Fall back to the logical IDs in the CV system map, which may be
+            # non-contiguous when a replacement station is assigned a new ID.
+            self.robot_ids = sorted(int(rid) for rid in settings()['niryo_ips'])
             self.get_logger().warn(f"   Using default robot IDs: {self.robot_ids}")
 
     def _load_conveyor_config(self):
@@ -213,6 +222,7 @@ class NiryoFactoryNode(Node):
 
         # CV detection subscribers for CV-enabled robots.
         for robot_id in self.cv_robot_ids:
+            self.workspace_publishers[robot_id] = self.create_publisher(String, f'/robot{robot_id}/cv_workspace', 10)
             topic = f'/robot{robot_id}/cv_detection'
 
             sub = self.create_subscription(
@@ -255,6 +265,11 @@ class NiryoFactoryNode(Node):
         """Store the latest valid CV localization for one robot."""
         try:
             detection = json.loads(msg.data)
+
+            if not validate_detection(detection, robot_id):
+                self.latest_cv_detections[robot_id] = None
+                self.latest_cv_detection_times[robot_id] = 0.0
+                return
 
             required = (
                 'class',
@@ -322,11 +337,18 @@ class NiryoFactoryNode(Node):
             msg: String message containing status
         """
         status = msg.data
+        if status == 'CV_READY:' + self.cv_requested_pickups.get(robot_id, '?'):
+            event = self.cv_ready_events.get(robot_id)
+            if event is not None: event.set()
         self.robot_status[robot_id] = status
         self.get_logger().info(f"📊 [{robot_id}] STATUS: {status}")
 
-        # Wake any thread waiting in _wait_for_robot_done for this robot.
-        if status == 'IDLE' and robot_id in self.robot_idle_events:
+        if status == 'DONE':
+            self.robot_done_seen.add(robot_id)
+        if status == 'ERROR':
+            self.robot_failures[robot_id] = 'ROBOT_ERROR'
+            self.robot_idle_events[robot_id].set()
+        elif status == 'IDLE' and robot_id in self.robot_done_seen:
             self.robot_idle_events[robot_id].set()
 
 
@@ -577,6 +599,8 @@ class NiryoFactoryNode(Node):
             # Clear event BEFORE sending so a stale IDLE from a previous command
             # cannot cause _wait_for_robot_done to return immediately.
             self.robot_idle_events[robot_id].clear()
+            self.robot_done_seen.discard(robot_id)
+            self.robot_failures.pop(robot_id, None)
 
             if not self._send_command_to_robot(robot_id, command):
                 self.robot_status[robot_id] = 'IDLE'
@@ -589,10 +613,13 @@ class NiryoFactoryNode(Node):
 
             self.robot_status[robot_id] = 'EXECUTING'
 
-            self._wait_for_robot_done(robot_id)
-            self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
+            if self._wait_for_robot_done(robot_id):
+                self._publish_global_status(f"COMMAND_COMPLETE:{robot_id_str}")
+            else:
+                self._publish_global_status(f"COMMAND_FAILED:{robot_id_str}:ROBOT_ERROR_OR_TIMEOUT")
         except Exception as e:
             self.get_logger().error(f"❌ {robot_id_str} command failed: {e}")
+            self._publish_global_status(f"COMMAND_FAILED:{robot_id_str}:EXCEPTION")
 
     def _parse_robot_id(self, robot_id_str: str) -> str:
         """
@@ -653,7 +680,7 @@ class NiryoFactoryNode(Node):
         Send command to a robot.
 
         R1/R4 retain the original plain-string command format.
-        CV pick/place commands for R2/R3/R5/R6 are wrapped with
+        CV pick/place commands for logical R2/R3/R5/R6 are wrapped with
         the latest fresh CV localization.
         """
         if robot_id not in self.command_publishers:
@@ -676,105 +703,46 @@ class NiryoFactoryNode(Node):
             and 'DROP' in command.upper()
         )
 
-        if robot_num in self.cv_robot_ids and is_pick_place:
-            # Proven continuous-flow trigger behavior:
-            #   1. Arm when route command arrives.
-            #   2. Ignore detections that existed before this command.
-            #   3. Wait for a NEW chip to enter the ROI.
-            #   4. Start a 4.0 s dwell timer on first sighting.
-            #   5. Keep consuming updated detections while conveyor runs.
-            #   6. At/after dwell completion, require chip still visible.
-            #   7. Lock latest XY and dispatch pickup.
-            #
-            # Conveyor remains ON throughout normal pickup operation.
-            cv_wait_timeout = 30.0
-            cv_ready_delay = 5.75
-            cv_visible_max_age = 0.75
-
-            command_armed_at = time.time()
-            wait_deadline = command_armed_at + cv_wait_timeout
-
-            first_seen_at = None
-            detection = None
-            detection_age = float('inf')
-
-            self.get_logger().info(
-                f"R{robot_num}: CV PICK ARMED - waiting for NEW ROI target "
-                f"(dwell={cv_ready_delay:.1f}s, timeout={cv_wait_timeout:.1f}s)"
-            )
-
-            while time.time() < wait_deadline:
-                now = time.time()
-
-                candidate = self.latest_cv_detections.get(robot_num)
-                candidate_time = self.latest_cv_detection_times.get(
-                    robot_num, 0.0
-                )
-
-                # Ignore any target that was already present before this
-                # command was armed.
-                if (
-                    first_seen_at is None
-                    and candidate is not None
-                    and candidate_time > command_armed_at
-                ):
-                    first_seen_at = candidate_time
-
-                    self.get_logger().info(
-                        f"R{robot_num}: NEW ROI target detected - "
-                        f"starting {cv_ready_delay:.1f}s dwell"
-                    )
-
-                if first_seen_at is not None:
-                    detection_age = now - candidate_time
-                    dwell_elapsed = now - first_seen_at
-
-                    # Match proven FIFO behavior:
-                    # timer may finish while target is temporarily absent,
-                    # but pickup only fires once target is visible again.
-                    target_visible = (
-                        candidate is not None
-                        and candidate_time > command_armed_at
-                        and detection_age <= cv_visible_max_age
-                    )
-
-                    if dwell_elapsed >= cv_ready_delay and target_visible:
-                        detection = candidate
-
-                        self.get_logger().info(
-                            f"R{robot_num}: ROI DWELL COMPLETE - "
-                            f"locking latest XY after {dwell_elapsed:.2f}s "
-                            f"(age={detection_age:.3f}s)"
-                        )
+        if is_pick_place:
+            _, pickup, _ = parse_pick(command)
+            mode = pickup_mode(robot_num, pickup)
+            if mode == 'cv':
+                workspace(robot_num, pickup)  # fail before requesting motion if calibration is absent
+                event = threading.Event()
+                self.cv_ready_events[robot_id] = event
+                self.cv_requested_pickups[robot_id] = pickup
+                prepare = String(); prepare.data = json.dumps({'cmd':'CV_PREPARE','pickup':pickup})
+                self.command_publishers[robot_id].publish(prepare)
+                if not event.wait(timeout=40):
+                    self.get_logger().error('CV view preparation timed out')
+                    return False
+                if robot_num not in self.workspace_publishers:
+                    self.workspace_publishers[robot_num] = self.create_publisher(String, f'/robot{robot_num}/cv_workspace', 10)
+                selection = String(); selection.data = pickup
+                self.workspace_publishers[robot_num].publish(selection)
+                gate = TargetGate(robot_num, time.time())
+                deadline = time.monotonic() + settings()['cv']['wait_timeout']
+                detection = None
+                self.get_logger().info(f'R{robot_num}/{pickup}: waiting for fresh CV target')
+                while time.monotonic() < deadline:
+                    candidate = self.latest_cv_detections.get(robot_num)
+                    if candidate and candidate.get('pickup') != pickup: candidate = None
+                    detection = gate.observe(candidate, time.time())
+                    if detection is not None:
                         break
-
-                time.sleep(0.02)
-
-            # Fail-safe: never use a fixed pickup fallback.
-            if detection is None:
-                self.get_logger().warn(
-                    f"R{robot_num}: CV target timeout - "
-                    f"no visible target ready after {cv_wait_timeout:.1f}s"
-                )
-                return False
-
-            envelope = {
-                'cmd': command,
-                'cv_pick': True,
-                'cv_x': float(detection['robot_x']),
-                'cv_y': float(detection['robot_y']),
-                'cv_class': detection['class'],
-                'cv_confidence': float(detection['confidence']),
-            }
-
-            outgoing = json.dumps(envelope)
-
-            self.get_logger().info(
-                f"R{robot_num}: attaching CV target "
-                f"XY=({envelope['cv_x']:.4f}, "
-                f"{envelope['cv_y']:.4f}) "
-                f"age={detection_age:.2f}s"
-            )
+                    time.sleep(0.02)
+                if detection is None:
+                    self.get_logger().error(f'R{robot_num}/{pickup}: CV timeout; no fixed fallback')
+                    return False
+                outgoing = json.dumps({
+                    'cmd': command, 'cv_pick': True,
+                    'cv_x': float(detection['robot_x']), 'cv_y': float(detection['robot_y']),
+                    'cv_class': detection['class'], 'cv_confidence': detection['confidence'],
+                    'capture_time': detection['capture_time'],
+                    'frame_sequence': detection['frame_sequence'],
+                })
+            else:
+                outgoing = json.dumps({'cmd': command, 'cv_pick': False, 'pickup_mode': 'fixed'})
 
         msg = String()
         msg.data = outgoing
@@ -800,10 +768,9 @@ class NiryoFactoryNode(Node):
             timeout: Maximum time to wait in seconds
         """
         self.get_logger().info(f"⏳ Waiting for {robot_id} to become IDLE...")
-        if self.robot_idle_events[robot_id].wait(timeout=timeout):
-            self.get_logger().info(f"✅ {robot_id} is IDLE and ready")
-        else:
-            self.get_logger().error(f"⏱️ Timeout waiting for {robot_id}")
+        completed = self.robot_idle_events[robot_id].wait(timeout=timeout)
+        return bool(completed and robot_id in self.robot_done_seen
+                    and robot_id not in self.robot_failures)
 
     def _publish_global_status(self, status: str):
         """Publish global factory status."""

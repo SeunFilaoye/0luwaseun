@@ -1,0 +1,67 @@
+{
+  "mode": "agv",
+  "source": "demo_24_parts.sh",
+  "batches": [
+    {
+      "number": 1,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C1 R1 | DROP - CONVEYOR 1\nXARM2 | PICKUP - ASRS C4 R1 | DROP - CONVEYOR 4\n---\nR1 | PICKUP - P11 | DROP - D15\nR4 | PICKUP - P15 | DROP - D12\n---\nR3 | PICKUP - P14 | DROP - D18\nR6 | PICKUP - P18 | DROP - D11"
+    },
+    {
+      "number": 2,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C1 R2 | DROP - CONVEYOR 2\nXARM2 | PICKUP - ASRS C4 R2 | DROP - AGV A\n---\nR1 | PICKUP - P12 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13\n---\nAGV1 | PICKUP - A | DROP - D\nR6 | PICKUP - P12 | DROP - D11"
+    },
+    {
+      "number": 3,
+      "restored_from_commented_definition": true,
+      "trajectory": "XARM1 | PICKUP - ASRS C1 R3 | DROP - AGV2 A\nXARM2 | PICKUP - ASRS C4 R3 | DROP - CONVEYOR 2\n---\nR1 | PICKUP - P12 | DROP - D15\nR4 | PICKUP - P15 | DROP - D12\n---\nAGV4 | PICKUP - A | DROP - D\nR4 | PICKUP - P12 | DROP - D12"
+    },
+    {
+      "number": 4,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C1 R4 | DROP - CONVEYOR 1\nXARM2 | PICKUP - ASRS C4 R4 | DROP - AGV A\n---\nR1 | PICKUP - P11 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D12\n---\nAGV1 | PICKUP - A | DROP - E\nR5 | PICKUP - P13 | DROP - D11"
+    },
+    {
+      "number": 5,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C1 R5 | DROP - CONVEYOR 2\nXARM2 | PICKUP - ASRS C4 R5 | DROP - CONVEYOR 4\n---\nR1 | PICKUP - P12 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13\n---\nR3 | PICKUP - P14 | DROP - D18\nR6 | PICKUP - P18 | DROP - D11"
+    },
+    {
+      "number": 6,
+      "restored_from_commented_definition": true,
+      "trajectory": "XARM1 | PICKUP - ASRS C1 R6 | DROP - AGV2 A\nXARM2 | PICKUP - ASRS C4 R6 | DROP - CONVEYOR 2\n---\nR1 | PICKUP - P12 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13\n---\nAGV4 | PICKUP - A | DROP - D\nR4 | PICKUP - P12 | DROP - D12"
+    },
+    {
+      "number": 7,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C2 R1 | DROP - CONVEYOR 1\nXARM2 | PICKUP - ASRS C5 R1 | DROP - CONVEYOR 4\n---\nR1 | PICKUP - P11 | DROP - D15\nR4 | PICKUP - P15 | DROP - D12\n---\nR3 | PICKUP - P14 | DROP - D18\nR6 | PICKUP - P18 | DROP - D11"
+    },
+    {
+      "number": 8,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C2 R2 | DROP - CONVEYOR 2\nXARM2 | PICKUP - ASRS C5 R2 | DROP - AGV A\n---\nR1 | PICKUP - P12 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13\n---\nAGV1 | PICKUP - A | DROP - D\nR6 | PICKUP - P12 | DROP - D11"
+    },
+    {
+      "number": 9,
+      "restored_from_commented_definition": true,
+      "trajectory": "XARM1 | PICKUP - ASRS C2 R3 | DROP - AGV2 A\nXARM2 | PICKUP - ASRS C5 R3 | DROP - CONVEYOR 2\n---\nR1 | PICKUP - P12 | DROP - D15\nR4 | PICKUP - P15 | DROP - D12\n---\nAGV4 | PICKUP - A | DROP - D\nR4 | PICKUP - P12 | DROP - D12"
+    },
+    {
+      "number": 10,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C2 R4 | DROP - CONVEYOR 1\nXARM2 | PICKUP - ASRS C5 R4 | DROP - AGV A\n---\nR1 | PICKUP - P11 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D12\n---\nAGV1 | PICKUP - A | DROP - E\nR5 | PICKUP - P13 | DROP - D11"
+    },
+    {
+      "number": 11,
+      "restored_from_commented_definition": false,
+      "trajectory": "XARM1 | PICKUP - ASRS C2 R5 | DROP - CONVEYOR 2\nXARM2 | PICKUP - ASRS C5 R5 | DROP - CONVEYOR 4\n---\nR1 | PICKUP - P12 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13\n---\nR3 | PICKUP - P14 | DROP - D18\nR6 | PICKUP - P18 | DROP - D11"
+    },
+    {
+      "number": 12,
+      "restored_from_commented_definition": true,
+      "trajectory": "XARM1 | PICKUP - ASRS C2 R6 | DROP - AGV2 A\nXARM2 | PICKUP - ASRS C5 R6 | DROP - CONVEYOR 2\n---\nR1 | PICKUP - P12 | DROP - D13\nR2 | PICKUP - P13 | DROP - D17\nR5 | PICKUP - P17 | DROP - D13\n---\nAGV4 | PICKUP - A | DROP - D\nR4 | PICKUP - P12 | DROP - D12"
+    }
+  ],
+  "routing_revision": "2026-10-14: R4 handles IR-stopped C5/P15. R2 uses C3/P13 CV only; batches 5 and 11 feed C3 instead of C5, preserving downstream R5 destination."
+}

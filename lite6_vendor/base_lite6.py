@@ -42,7 +42,7 @@ class BaseLite6:
         self.node = node
         self.robot_id = robot_id
         self.robot_ip = robot_ip
-        self.namespace = "/ufactory"  # Standard namespace for Lite6
+        self.namespace = os.environ.get("THESIS_XARM_NAMESPACE", "/ufactory")
         self.xarm_api = None
         self.xarmapi_initialized = False
         
@@ -172,8 +172,10 @@ class BaseLite6:
         
         # Gripper control handled by XArmAPI directly (no ROS2 service needed)
 
-        # Wait for core services
-        self.node.get_logger().info("⏳ Waiting for robot services...")
+        # ROS2 UFactory services are optional in the CV-integration runtime.
+        # Do not block controller startup waiting for them; direct XArmAPI
+        # handles motion/gripper control when these services are unavailable.
+        self.node.get_logger().info("🔎 Checking optional robot services (non-blocking)...")
         services = {
             'clean_error': self.clean_error_client,
             'motion_enable': self.motion_enable_client,
@@ -184,13 +186,18 @@ class BaseLite6:
         }
 
         for name, service in services.items():
-            ready = self._wait_for_service(name, service, timeout_total=60.0, step=2.0)
+            ready = service.service_is_ready()
             self.service_ready[name] = ready
-            if not ready:
-                self.node.get_logger().error(
-                    f"❌ [{self.robot_id}] Service not available: {service.srv_name}")
+            if ready:
+                self.node.get_logger().info(
+                    f"✅ [{self.robot_id}] ROS service available: {service.srv_name}")
+            else:
+                self.node.get_logger().warn(
+                    f"⚠️ [{self.robot_id}] ROS service unavailable: {service.srv_name}; "
+                    "XArmAPI path will be used where supported")
 
-        self.node.get_logger().info("✅ All services connected")
+        self.node.get_logger().info(
+            f"✅ [{self.robot_id}] Service setup complete (non-blocking)")
 
     def _ensure_xarmapi(self) -> bool:
         """

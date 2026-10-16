@@ -28,6 +28,9 @@ import json
 from pathlib import Path
 from threading import Lock
 from std_msgs.msg import String
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from thesis_cv.policy import pickup_mode, settings, workspace
 
 from base_robot import BaseRobot
 
@@ -41,6 +44,7 @@ class NiryoRobotController(BaseRobot):
     """
 
     # State machine states
+    STATE_INITIALIZING = "INITIALIZING"
     STATE_IDLE = "IDLE"
     STATE_MOVING_TO_PICKUP = "MOVING_TO_PICKUP"
     STATE_PICKING = "PICKING"
@@ -68,7 +72,7 @@ class NiryoRobotController(BaseRobot):
         super().__init__(robot_id, config_path)
 
         # State management
-        self.current_state = self.STATE_IDLE
+        self.current_state = self.STATE_INITIALIZING
         self.state_lock = Lock()
         self.state_start_time = time.time()
 
@@ -81,6 +85,9 @@ class NiryoRobotController(BaseRobot):
         # ----------------------------------------------------
         self.cv_enabled = self.robot_id in (2, 3, 5, 6)
         self.cv_pick_reference = None
+        self.create_timer(1.0, lambda: self.publish_status(self.current_state))
+        self.active_cv_pickup = None
+        self.active_cv_view = None
 
         # Freshly recalibrated workspaces start with no XY correction.
         # Add robot-specific offsets only if live CV pickup testing proves
@@ -304,6 +311,11 @@ class NiryoRobotController(BaseRobot):
             self.add_message_to_queue('cv_contact_test', task_data)
             return
 
+        if command.upper() == 'CV_PREPARE':
+            pickup = str(cv_payload.get('pickup', '')).upper()
+            self.add_message_to_queue('cv_prepare', pickup)
+            return
+
         # Check if it's an initialization command
         if command.upper() == 'INITIALIZE':
             # Can initialize from any state
@@ -336,15 +348,27 @@ class NiryoRobotController(BaseRobot):
                 if task_data:
                     # CV-enabled robots must receive live coordinates.
                     # Never silently fall back to their fixed Pxx pickup.
-                    if self.cv_enabled:
+                    mode = pickup_mode(self.robot_id, task_data['pickup_position_key'])
+                    if mode == 'cv':
+                        if self.active_cv_pickup != task_data['pickup_position_key']:
+                            self.set_state(self.STATE_ERROR, 'CV workspace was not prepared')
+                            return
                         if not cv_payload.get('cv_pick', False):
                             self.get_logger().error(
                                 f"Robot R{self.robot_id}: "
                                 f"CV pickup command received without CV coordinates"
                             )
+                            self.set_state(self.STATE_ERROR, "Missing CV coordinates")
                             return
 
                         try:
+                            import math
+                            age = time.time() - float(cv_payload['capture_time'])
+                            if not 0 <= age <= settings()['cv']['max_frame_age']:
+                                raise ValueError('Stale CV coordinates')
+                            if not all(math.isfinite(float(cv_payload[k])) for k in ('cv_x','cv_y')):
+                                raise ValueError('Non-finite CV coordinates')
+                            task_data['capture_time'] = cv_payload['capture_time']
                             task_data['cv_pick'] = True
                             task_data['cv_x'] = float(cv_payload['cv_x'])
                             task_data['cv_y'] = float(cv_payload['cv_y'])
@@ -359,7 +383,12 @@ class NiryoRobotController(BaseRobot):
                                 f"Robot R{self.robot_id}: "
                                 f"Invalid CV command payload: {e}"
                             )
+                            self.set_state(self.STATE_ERROR, str(e))
                             return
+
+                    if mode == 'fixed' and cv_payload.get('cv_pick', False):
+                        self.set_state(self.STATE_ERROR, 'CV coordinates supplied for an uncalibrated pickup location')
+                        return
 
                     self.current_task = task_data
                     self.task_start_time = time.time()
@@ -379,6 +408,7 @@ class NiryoRobotController(BaseRobot):
             self.get_logger().error(
                 f"Robot R{self.robot_id}: Error handling task command: {e}"
             )
+            self.set_state(self.STATE_ERROR, str(e))
 
     def _parse_pick_place_command(self, command: str) -> dict:
         """
@@ -607,7 +637,7 @@ class NiryoRobotController(BaseRobot):
                 "CV contact test: returning to view"
             )
 
-            if not self.move_to_position('cv_view_joints'):
+            if not self.move_to_joints(self.active_cv_view or self.config['cv_view_joints']['joints'], 'calibrated CV view'):
                 self.get_logger().error(
                     f"Robot R{self.robot_id}: "
                     "CV contact test could not return to view"
@@ -645,6 +675,9 @@ class NiryoRobotController(BaseRobot):
         Returns:
             bool: True if task completed successfully
         """
+        if task.get('cv_pick') and not 0 <= time.time()-float(task.get('capture_time',0)) <= settings()['cv']['max_frame_age']:
+            self.set_state(self.STATE_ERROR, 'CV target expired before execution')
+            return False
         pickup_pos = task['pickup_position_key']
         drop_pos = task['drop_position_key']
 
@@ -653,7 +686,7 @@ class NiryoRobotController(BaseRobot):
 
         try:
             # ==================================================
-            # CV PICKUP PATH — R2 / R3 / R5 / R6
+            # CV PICKUP PATH — logical R2 / R3 / R5 / R6 (physical robots 2, 4, 5, 6)
             # ==================================================
             if self.cv_enabled and task.get('cv_pick', False):
 
@@ -819,7 +852,7 @@ class NiryoRobotController(BaseRobot):
                     "Returning to calibrated CV view"
                 )
 
-                if not self.move_to_position('cv_view_joints'):
+                if not self.move_to_joints(self.active_cv_view or self.config['cv_view_joints']['joints'], 'calibrated CV view'):
                     self.set_state(
                         self.STATE_ERROR,
                         "Failed to return to CV view"
@@ -909,7 +942,7 @@ class NiryoRobotController(BaseRobot):
 
             # Step 8: Return to home
             self.set_state(self.STATE_RETURNING_HOME, "Returning home")
-            if not self.move_to_position('home_joints'):
+            if not self.move_to_position('cv_view_joints' if self.cv_enabled else 'home_joints'):
                 self.set_state(self.STATE_ERROR, "Failed to return to home")
                 return False
 
@@ -932,6 +965,22 @@ class NiryoRobotController(BaseRobot):
             )
             self.set_state(self.STATE_ERROR, f"Exception: {str(e)}")
             return False
+
+    def prepare_cv_workspace(self, pickup):
+        try:
+            _, view, reference, offsets = workspace(self.robot_id, pickup)
+            self.set_state('PREPARING_CV', pickup)
+            if not self.move_to_joints(view['home_view_joints'], f'CV view for {pickup}'):
+                raise RuntimeError('Unable to reach camera view')
+            self.cv_pick_reference = reference
+            self.cv_x_offset = float(offsets.get('cv_x_offset', 0.0))
+            self.cv_y_offset = float(offsets.get('cv_y_offset', 0.0))
+            self.active_cv_view = view['home_view_joints']
+            self.active_cv_pickup = pickup
+            self.set_state(self.STATE_IDLE, 'CV view reached')
+            self.publish_status(f'CV_READY:{pickup}')
+        except Exception as exc:
+            self.set_state(self.STATE_ERROR, str(exc))
 
     def execute_initialize(self):
         """
@@ -956,7 +1005,11 @@ class NiryoRobotController(BaseRobot):
                 else 'home_joints'
             )
 
-            if not self.move_to_position(initialize_position):
+            target=self.config[initialize_position]['joints']
+            already_there=self.is_at_joint_target(target)
+            if already_there:
+                self.get_logger().info(f"Robot R{self.robot_id}: fresh joint state already matches {initialize_position}; skipping redundant move")
+            elif not self.move_to_position(initialize_position):
                 self.get_logger().error(
                     f"Robot R{self.robot_id}: "
                     f"Failed to move to {initialize_position}"
@@ -1126,6 +1179,7 @@ class NiryoRobotController(BaseRobot):
         Continuously processes messages from queue and executes tasks.
         Monitors for timeouts and handles errors.
         """
+        self.set_state(self.STATE_IDLE, 'Startup complete')
         self.get_logger().info(f"Robot R{self.robot_id}: Starting operation loop")
 
         while not self.shutdown_event.is_set():
@@ -1136,12 +1190,10 @@ class NiryoRobotController(BaseRobot):
 
                 # Handle ERROR state
                 if self.get_state() == self.STATE_ERROR:
-                    if self.attempt_recovery():
-                        continue
-                    else:
-                        # Recovery failed, wait before trying again
-                        time.sleep(5.0)
-                        continue
+                    # A failed task stays failed. No automatic release/home motion.
+                    # The operator stops/inspects the stack before restarting it.
+                    rclpy.spin_once(self, timeout_sec=0.1)
+                    continue
 
                 # Process next message from queue
                 message = self.get_next_message()
@@ -1176,6 +1228,12 @@ class NiryoRobotController(BaseRobot):
                                 f"Robot R{self.robot_id}: Cannot execute sequence in "
                                 f"{self.get_state()} state"
                             )
+
+                    elif message['type'] == 'cv_prepare':
+                        if self.get_state() == self.STATE_IDLE:
+                            self.prepare_cv_workspace(message['data'])
+                        else:
+                            self.publish_status('ERROR')
 
                     elif message['type'] == 'initialize':
                         self.execute_initialize()

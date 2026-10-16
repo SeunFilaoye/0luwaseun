@@ -205,6 +205,9 @@ Conveyor restarts
 
 CV R2/R3/R5/R6:
 
+> Naming clarification: these are logical/ROS robot IDs. The physical robots using CV are Robots 2, 4, 5, and 6. Physical Robot 4 (192.168.0.223) now serves the logical R3 role and therefore appears in ROS as `/robot3`. The new robot at 192.168.0.227 serves logical R4 and remains on the legacy non-CV/IR workflow.
+
+
 ```text
 Conveyor runs continuously
   ↓

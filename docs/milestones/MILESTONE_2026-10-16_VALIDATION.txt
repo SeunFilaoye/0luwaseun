@@ -1,0 +1,10 @@
+Pre-overhead/R1 integration milestone — 16 October 2026
+
+Command: ./thesis_cv/tests/run.sh
+Result: 38 tests passed; exit 0.
+Policy: 14; isolated ROS flow: 11; hardware contracts: 6; launcher: 5; conveyor modes: 2.
+Tests use ROS_DOMAIN_ID=93, ROS_LOCALHOST_ONLY=1, fake actuators/services and mocked motion.
+Staged Python AST checks, bash -n and git diff --cached --check passed.
+The ROS flow suite includes all twelve no-AGV batches and checks all eight arms.
+Original demo preservation checks passed. No live motion was performed for this checkpoint.
+Physical 24-part acceptance remains unverified; known R2 connectivity and absent overhead camera devices are documented in the milestone.

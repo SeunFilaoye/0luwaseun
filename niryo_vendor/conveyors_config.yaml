@@ -2,34 +2,37 @@
 # CRITICAL: robot_namespace must match the physical robot panel the conveyor is connected to!
 
 conveyor_1:
+  operating_mode: ir
   robot_namespace: "robot1"        # ← NEW: Physical connection
-  conveyor_hardware_id: 10
-  speed: 70
-  description: "Conveyor C1 - Feeds Robot R1 from X-arm1"
-
-  sensors:
-    forward:
-      pin: "DI5"
-      direction: 1
-      triggers_robot: 1
-      pickup_position: "P11"
-      description: "Multipath flow, either C5 or C4"
-
-conveyor_2:
-  robot_namespace: "robot1"        # ← FIXED: C2 is on R1's panel (hardware_id 10)
   conveyor_hardware_id: 9
   speed: 70
-  description: "Conveyor C2 - Feeds Robot R1 from X-arm1 or X-arm2"
+  description: "Conveyor C1 - Feeds Robot R1 from X-arm1"
 
   sensors:
     forward:
       pin: "DI3"
       direction: 1
       triggers_robot: 1
+      pickup_position: "P11"
+      description: "Multipath flow, either C5 or C4"
+
+conveyor_2:
+  operating_mode: ir
+  robot_namespace: "robot1"        # ← FIXED: C2 is on R1's panel (hardware_id 10)
+  conveyor_hardware_id: 10
+  speed: 70
+  description: "Conveyor C2 - Feeds Robot R1 from X-arm1 or X-arm2"
+
+  sensors:
+    forward:
+      pin: "DI5"
+      direction: 1
+      triggers_robot: 1
       pickup_position: "P12"
       description: "Multipath flow, either C5 or C4"
 
 conveyor_3:
+  operating_mode: continuous
   robot_namespace: "robot2"        # ← FIXED: C3 is on R2's panel
   conveyor_hardware_id: 9
   speed: 70
@@ -44,6 +47,7 @@ conveyor_3:
       description: "Normal flow to R3"
 
 conveyor_4:
+  operating_mode: continuous
   robot_namespace: "robot3"        # ← FIXED: C4 is on R3's panel
   conveyor_hardware_id: 9
   speed: 70
@@ -58,8 +62,9 @@ conveyor_4:
       description: "Normal flow to R3 or R4"
 
 conveyor_5:
-  robot_namespace: "robot4"        # ← FIXED: C5 is on R4's panel
-  conveyor_hardware_id: 10
+  operating_mode: ir
+  robot_namespace: "robot4"        # C5 is on logical R4's panel (.227)
+  conveyor_hardware_id: 9
   speed: 70
   description: "Conveyor C5 - Feeds Robot R4 from R1"
   
@@ -69,11 +74,13 @@ conveyor_5:
       direction: 1
       triggers_robot: 4
       pickup_position: "P15"
-      description: "Normal forward flow to R4"
+      pickup_mode: "ir"
+      description: "Stop on blocked DI1; R4 taught P15 pickup after confirmed belt stop"
 
 conveyor_6:
-  robot_namespace: "robot4"        # ← FIXED: C6 is on R4's panel (hardware_id 10)
-  conveyor_hardware_id: 9
+  operating_mode: ir
+  robot_namespace: "robot4"        # C6 is on logical R4's panel (.227)
+  conveyor_hardware_id: 10
   speed: 70
   description: "Conveyor C6 - Feeds Robot R5 from R4"
   
@@ -86,6 +93,7 @@ conveyor_6:
       description: "Normal forward flow to R5"
 
 conveyor_7:
+  operating_mode: continuous
   robot_namespace: "robot5"        # ← FIXED: C7 is on R5's panel
   conveyor_hardware_id: 9
   speed: 70
@@ -100,6 +108,7 @@ conveyor_7:
       description: "Normal flow to R5"
 
 conveyor_8:
+  operating_mode: continuous
   robot_namespace: "robot6"        # ← FIXED: C8 is on R6's panel
   conveyor_hardware_id: 9
   speed: 70
@@ -123,7 +132,7 @@ metadata:
   physical_topology:
     robot1:
       conveyors: [1, 2]
-      hardware_ids: [10, 9]
+      hardware_ids: [9, 10]
     robot2:
       conveyors: [3]
       hardware_ids: [9]

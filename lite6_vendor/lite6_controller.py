@@ -93,6 +93,7 @@ class Lite6RobotNode(Node):
         
         # Publish initial status
         self._publish_status("IDLE")
+        self.create_timer(1.0, lambda: self._publish_status(self.current_status) if self.current_status in ("IDLE", "ERROR") else None)
         
         self.get_logger().info("=" * 60)
         self.get_logger().info(f"✅ {robot_id} ROBOT NODE READY")

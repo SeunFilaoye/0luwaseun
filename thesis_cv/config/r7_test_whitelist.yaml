@@ -1,0 +1,22 @@
+# Minimal commissioning surface. It exposes status/state/vision and the
+# interfaces needed to inspect C5/C6 and the vacuum, but this test sends no
+# motion, conveyor, or tool requests.
+/**:
+  ros__parameters:
+    topic_whitelist:
+      - "/niryo_robot_hardware_interface/hardware_status"
+      - "/niryo_robot/robot_state"
+      - "/joint_states"
+      - "/niryo_robot_vision/compressed_video_stream"
+      - "/niryo_robot/conveyor/feedback"
+      - "/niryo_robot_rpi/digital_io_state"
+    service_whitelist:
+      - "/niryo_robot/tools/.*"
+      - "/niryo_robot_tools_commander/.*"
+      - "/niryo_robot_arm_commander/.*"
+      - "/niryo_robot/conveyor/.*"
+      - "/niryo_robot_rpi/.*"
+      - "/niryo_robot_vision/.*"
+    action_whitelist:
+      - "/niryo_robot_arm_commander/robot_action"
+      - "/niryo_robot_tools_commander/action_server"

@@ -26,6 +26,9 @@ import time
 import json
 import sys
 import os
+import uuid
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from thesis_cv.policy import parse_pick, pickup_mode, workspace, settings, route_dependencies
 from queue import Queue
 from enum import Enum
 
@@ -63,7 +66,14 @@ class SuperFactoryNode(Node):
         self.state = SuperFactoryState.IDLE
         self.order_batch = []  # Accumulate orders here
         self.current_part_locations = {}  # ASRS response data
-        self.trajectory_queue = Queue()  # Algorithm trajectories to execute
+        self.trajectory_queue = Queue()  # Atomic batches, including downstream routes
+        self.batch_results = {}
+        self.execution_halted = False
+        self.command_failures = {}
+        self.vendor_ack_events = {v: threading.Event() for v in ('niryo', 'lite6', 'agv', 'agv2', 'conveyor')}
+        self.vendor_complete_events = {v: threading.Event() for v in self.vendor_ack_events}
+        self.batch_status_pub = self.create_publisher(String, '/thesis_cv/batch_status', 10)
+        self.create_subscription(String, '/thesis_cv/trajectory', self._on_thesis_trajectory, 10)
 
         # Vendor factory configurations
         self.vendor_factories = {
@@ -135,6 +145,7 @@ class SuperFactoryNode(Node):
         # token.  Prevents the xArm dropping a part onto an empty loading slot.
         self._agv_at_a = threading.Event()   # vendor 1  (AGV1/2/3)
         self._agv2_at_a = threading.Event()  # vendor 2  (AGV4/5)
+        self.agv_ready_time = {'agv': 0.0, 'agv2': 0.0}
 
         # Guards against ghost Niryo dispatches when an upstream pick failed.
         # Counts how many xArm drops onto each AGV fleet are in-flight.
@@ -478,95 +489,64 @@ class SuperFactoryNode(Node):
         self.get_logger().info("📤 Algorithm triggered")
         self.get_logger().info("⏳ Waiting for algorithm trajectories...")
 
-    def _on_algorithm_trajectory(self, msg):
-        """
-        Receive trajectories from algorithm node.
+    def _batch_status(self, batch_id, state, detail=''):
+        result = {'batch_id': batch_id, 'state': state, 'detail': detail, 'timestamp': time.time()}
+        self.batch_results[batch_id] = result
+        self.batch_status_pub.publish(String(data=json.dumps(result)))
 
-        Expected format (newline-separated trajectory strings):
-        'XARM1 | PICKUP | ASRS | C1 R5 | PLACE | AGV | A11'
-        'XARM2 | PICKUP | ASRS | C4 R5 | PLACE | AGV | A11'
-        'R1 | PICKUP | P12 | DROP | C11'
-
-        Args:
-            msg: String message containing trajectories
-        """
+    def _on_thesis_trajectory(self, msg):
         try:
-            trajectory_data = msg.data
+            request = json.loads(msg.data)
+            batch_id = str(request['batch_id'])
+            if batch_id in self.batch_results:
+                self.batch_status_pub.publish(String(data=json.dumps(self.batch_results[batch_id])))
+                return
+            self._queue_batch(request['trajectory'], batch_id)
+        except (ValueError, KeyError, TypeError) as exc:
+            self.get_logger().error(f'Invalid CV trajectory: {exc}')
 
-            self.get_logger().info("=" * 70)
-            self.get_logger().info("📥 ALGORITHM TRAJECTORIES RECEIVED")
-            self.get_logger().info("=" * 70)
+    def _on_algorithm_trajectory(self, msg):
+        self._queue_batch(msg.data, 'legacy-' + uuid.uuid4().hex)
 
-            lines = [t.strip() for t in trajectory_data.split('\n')]
-
-            # Separate XARM (pre-separator) commands from per-route niryo chains
-            xarm_tasks = []
-            route_chains = []   # list of lists — each inner list is one route's task sequence
-            current_chain = None
-
-            for line in lines:
+    def _queue_batch(self, trajectory, batch_id):
+        if self.execution_halted:
+            self._batch_status(batch_id, 'FAILED', 'Supervisor halted after failure; inspect hardware and restart stack')
+            return
+        xarms, routes, chain = [], [], None
+        try:
+            for line in trajectory.splitlines():
+                line = line.strip()
                 if not line:
                     continue
                 if line == '---':
-                    current_chain = []
-                    route_chains.append(current_chain)
+                    chain = []
+                    routes.append(chain)
                     continue
-                self.get_logger().info(f"   → {line}")
                 task = self._parse_trajectory(line)
-                if task:
-                    if current_chain is not None:
-                        current_chain.append(task)
-                    else:
-                        xarm_tasks.append(task)
-
-            self.get_logger().info(
-                f"   XARM tasks: {len(xarm_tasks)}, "
-                f"Route chains: {len(route_chains)} "
-                f"({[len(c) for c in route_chains]})"
-            )
-
-            # All XARM tasks (1 or more) go through parallel_xarms so they all
-            # use COMMAND_COMPLETE:XARMx for completion — never the bare ACK+
-            # task_complete path, which times out because lite6 doesn't send ACK.
-            if xarm_tasks:
-                self.trajectory_queue.put({
-                    'type': 'parallel_xarms',
-                    'tasks': xarm_tasks,
-                    'vendor': 'lite6',
-                    'robot_id': 'XARM_ALL',
-                    'command': 'PARALLEL_XARMS',
-                    'original': 'PARALLEL_XARMS'
-                })
-
-            # Queue route chains as a BACKGROUND meta-task (non-blocking).
-            # The niryo_batch_semaphore ensures batches don't overlap even
-            # though the trajectory executor moves on immediately.
-            if route_chains:
-                self.trajectory_queue.put({
-                    'type': 'parallel_routes_bg',
-                    'routes': route_chains,
-                    'vendor': 'meta',
-                    'robot_id': 'N/A',
-                    'command': 'PARALLEL_ROUTES_BG',
-                    'original': 'PARALLEL_ROUTES_BG'
-                })
-            elif not xarm_tasks:
-                # Fallback: no separators in output — put all as flat tasks
-                for line in lines:
-                    if not line:
-                        continue
-                    task = self._parse_trajectory(line)
-                    if task:
-                        self.trajectory_queue.put(task)
-
+                if not task:
+                    raise ValueError(f'Unrecognized route line: {line}')
+                if task['vendor'] == 'niryo':
+                    robot, pickup, _ = parse_pick(task['command'])
+                    if robot in settings()['unavailable_roles']:
+                        raise ValueError(f'{robot}: replacement station not commissioned')
+                    if pickup_mode(int(robot[1:]), pickup) == 'cv':
+                        workspace(int(robot[1:]), pickup)
+                if chain is None:
+                    if task['vendor'] != 'lite6':
+                        raise ValueError('Expected XARM loading commands before route separator')
+                    xarms.append(task)
+                else:
+                    chain.append(task)
+            if not xarms or not routes or any(not r for r in routes):
+                raise ValueError('Missing loading commands or downstream route')
+            self._batch_status(batch_id, 'ACCEPTED')
+            self.trajectory_queue.put({'type': 'batch', 'batch_id': batch_id,
+                'tasks': xarms, 'routes': routes, 'vendor': 'meta',
+                'robot_id': 'ALL', 'command': 'CV_BATCH'})
             self.algorithm_response_received.set()
-            self._update_state(SuperFactoryState.EXECUTING_TRAJECTORY)
-
-            # Clear batch for next cycle
             self.order_batch = []
-
-        except Exception as e:
-            self.get_logger().error(f"❌ Error handling algorithm trajectory: {e}")
+        except Exception as exc:
+            self._batch_status(batch_id, 'FAILED', str(exc))
 
     def _parse_trajectory(self, trajectory: str) -> dict:
         """
@@ -662,69 +642,34 @@ class SuperFactoryNode(Node):
     # ==================== TRAJECTORY EXECUTION ====================
 
     def _trajectory_executor(self):
-        """
-        Thread that executes trajectory tasks sequentially.
-        Waits for ACK and COMPLETE from vendor factories before moving to next task.
-        """
-        self.get_logger().info("🔄 Trajectory executor thread started")
-
-        while True:
+        while rclpy.ok():
+            task = self.trajectory_queue.get()
+            batch_id = task['batch_id']
             try:
-                # Wait for next task (blocking)
-                task = self.trajectory_queue.get(block=True)
-
+                if self.execution_halted:
+                    self._batch_status(batch_id, 'FAILED', 'Previous batch failed')
+                    continue
                 self.current_task = task
-
-                self.get_logger().info("\n" + "=" * 70)
-                self.get_logger().info(f"🚨 EXECUTING TASK")
-                self.get_logger().info("=" * 70)
-                self.get_logger().info(f"   Vendor: {task['vendor']}")
-                self.get_logger().info(f"   Robot: {task['robot_id']}")
-                self.get_logger().info(f"   Command: {task['command']}")
-
-                # Execute task
-                task_type = task.get('type')
-                if task_type == 'parallel_xarms':
-                    success = self._execute_parallel_xarms(task['tasks'])
-                elif task_type == 'parallel_routes_bg':
-                    # Fire niryo chains in a background thread so the executor
-                    # moves on immediately and the next batch's XARM picks can
-                    # start without waiting for niryo.  Per-robot locks inside
-                    # _execute_task serialise same-robot access across batches.
-                    routes = task['routes']
-                    def _run_niryo_bg(routes=routes):
-                        self._execute_parallel_routes(routes)
-                    threading.Thread(target=_run_niryo_bg, daemon=True).start()
-                    success = True
-                elif task_type == 'parallel_routes':
-                    success = self._execute_parallel_routes(task['routes'])
-                else:
-                    success = self._execute_task(task)
-
+                self._agv_part_loaded = self._agv2_part_loaded = 0
+                with self._agv_arrived_lock:
+                    self._agv_arrived_flags.clear()
+                    for event in self._agv_arrived_events.values(): event.clear()
+                self._update_state(SuperFactoryState.EXECUTING_TRAJECTORY)
+                self._batch_status(batch_id, 'RUNNING')
+                # Both loading arms must finish before any downstream dispatch.
+                success = self._execute_parallel_xarms(task['tasks'])
                 if success:
-                    self.get_logger().info("=" * 70)
-                    self.get_logger().info("✅ TASK COMPLETED SUCCESSFULLY")
-                    self.get_logger().info("=" * 70 + "\n")
-                else:
-                    self.get_logger().error("=" * 70)
-                    self.get_logger().error("❌ TASK FAILED")
-                    self.get_logger().error("=" * 70 + "\n")
-
-                # Mark task as done
-                self.trajectory_queue.task_done()
-
-                # Show remaining queue
-                remaining = self.trajectory_queue.qsize()
-                if remaining > 0:
-                    self.get_logger().info(f"📋 Tasks remaining: {remaining}")
-                else:
-                    self.get_logger().info("🎉 ALL TASKS COMPLETED!")
+                    success = self._execute_parallel_routes(task['routes'])
+                self.execution_halted = not success
+                self._batch_status(batch_id, 'COMPLETE' if success else 'FAILED',
+                                   '' if success else 'Hardware step failed or timed out; no next batch dispatched')
+                if success:
                     self._update_state(SuperFactoryState.IDLE)
-
-            except Exception as e:
-                self.get_logger().error(f"❌ Error executing task: {e}")
-                import traceback
-                self.get_logger().error(traceback.format_exc())
+            except Exception as exc:
+                self.execution_halted = True
+                self._batch_status(batch_id, 'FAILED', str(exc))
+            finally:
+                self.trajectory_queue.task_done()
 
     def _execute_parallel_routes(self, routes: list) -> bool:
         """
@@ -738,9 +683,25 @@ class SuperFactoryNode(Node):
         self.get_logger().info(f"🔀 Launching {len(routes)} route chains in parallel")
 
         results = [None] * len(routes)
+        dependencies = route_dependencies(routes)
+        finished = [threading.Event() for _ in routes]
         threads = []
 
         def run_chain(idx, tasks):
+            try:
+                for previous in dependencies[idx]:
+                    finished[previous].wait()
+                    if results[previous] is not True:
+                        results[idx] = False
+                        return
+                execute_chain(idx, tasks)
+            except Exception as exc:
+                results[idx] = False
+                self.get_logger().error(f'Route chain {idx} failed: {exc}')
+            finally:
+                finished[idx].set()
+
+        def execute_chain(idx, tasks):
             # Tag any Niryo task that immediately follows an AGV task so that:
             #   1. It waits for AGV_ARRIVED before executing (like IR gating)
             #   2. After it completes, READY_TO_RETURN is sent to the AGV fleet
@@ -832,6 +793,8 @@ class SuperFactoryNode(Node):
                 if 'AGV' in drop_segment:
                     agv_vendor = 'agv2' if 'AGV2' in drop_segment else 'agv'
                     ready_evt = self._agv2_at_a if agv_vendor == 'agv2' else self._agv_at_a
+                    if time.monotonic() - self.agv_ready_time[agv_vendor] > 10.0:
+                        ready_evt.clear()
                     if not ready_evt.is_set():
                         self.get_logger().info(
                             f"⏳ {arm_id}: waiting for IDLE AGV at A "
@@ -845,28 +808,35 @@ class SuperFactoryNode(Node):
                             f"✅ {arm_id}: AGV confirmed at A ({agv_vendor}), dispatching"
                         )
                     else:
-                        self.get_logger().warn(
-                            f"⚠️ {arm_id}: 60 s timeout waiting for AGV at A ({agv_vendor}) "
-                            f"— dispatching anyway to avoid deadlock"
-                        )
+                        self.get_logger().error(f'{arm_id}: no AGV at A; loading cancelled')
+                        group_results[arm_id] = False
+                        return
 
                 if arm_id not in self.xarm_completion_events:
                     self.xarm_completion_events[arm_id] = threading.Event()
                 evt = self.xarm_completion_events[arm_id]
                 evt.clear()
+                self.command_failures.pop(arm_id, None)
                 self._send_vendor_command(task['vendor'], task['command'])
                 ok = evt.wait(timeout=120.0)
-                if not ok:
+                if not ok or arm_id in self.command_failures:
                     self.get_logger().error(
-                        f"❌ Timeout waiting for {arm_id} on: {task['command']}"
+                        f"❌ Failure/timeout waiting for {arm_id} on: {task['command']}"
                     )
                     group_results[arm_id] = False
                     return
             group_results[arm_id] = True
 
+        def guarded_arm_group(arm_id, group_tasks):
+            try:
+                run_arm_group(arm_id, group_tasks)
+            except Exception as exc:
+                self.get_logger().error(f'{arm_id}: dispatch exception: {exc}')
+                group_results[arm_id] = False
+
         threads = [
             threading.Thread(
-                target=run_arm_group, args=(arm_id, group_tasks), daemon=True
+                target=guarded_arm_group, args=(arm_id, group_tasks), daemon=True
             )
             for arm_id, group_tasks in arm_groups.items()
         ]
@@ -875,7 +845,7 @@ class SuperFactoryNode(Node):
         for t in threads:
             t.join()
 
-        all_ok = all(group_results.values())
+        all_ok = all(group_results.get(arm_id) is True for arm_id in arm_groups)
         if all_ok:
             self.get_logger().info("✅ All XARM tasks completed")
         else:
@@ -898,17 +868,13 @@ class SuperFactoryNode(Node):
         vendor = task['vendor']
         command = task['command']
 
-        # Conveyor readiness:
-        # - R1 and R4 preserve the original IR-based gating.
-        # - R2, R3, R5 and R6 are CV-enabled and do not wait on IR.
-        #   Their downstream Niryo factory command is allowed to execute
-        #   only when a fresh CV detection is available.
-        # - AGV unload tasks keep their existing AGV-arrival gating.
+        # Gate each pickup location: R1/R4 use IR-stopped taught pickups;
+        # R2/R3/R5/R6 use CV. AGV unloads retain their arrival gate.
         if vendor == 'niryo' and not task.get('agv_unload_vendor'):
-            task_robot_id = task.get('robot_id', '').upper()
-            cv_robot_ids = {'R2', 'R3', 'R5', 'R6'}
+            task_robot_id, pickup, _ = parse_pick(command)
+            mode = pickup_mode(int(task_robot_id[1:]), pickup)
 
-            if task_robot_id in cv_robot_ids:
+            if mode == 'cv':
                 self.get_logger().info(
                     f"👁 {task_robot_id}: CV-enabled pickup — skipping IR gate"
                 )
@@ -939,10 +905,11 @@ class SuperFactoryNode(Node):
                 if robot_id not in self.robot_completion_events:
                     self.robot_completion_events[robot_id] = threading.Event()
                 self.robot_completion_events[robot_id].clear()
+                self.command_failures.pop(robot_id, None)
                 self._send_vendor_command(vendor, command)
                 self.get_logger().info(f"⏳ Waiting for {robot_id} to complete...")
                 complete_received = self.robot_completion_events[robot_id].wait(timeout=complete_timeout)
-                if not complete_received:
+                if not complete_received or robot_id in self.command_failures:
                     self.get_logger().error(f"❌ Per-robot completion timeout for {robot_id}")
                     return False
                 self.get_logger().info(f"✅ {robot_id} completed")
@@ -961,11 +928,11 @@ class SuperFactoryNode(Node):
                 and 'DROP' in command.upper()
             )
 
-            self.task_ack_received.clear()
-            self.task_complete.clear()
+            self.vendor_ack_events[vendor].clear()
+            self.vendor_complete_events[vendor].clear()
             self._send_vendor_command(vendor, command)
             self.get_logger().info(f"⏳ Waiting for ACK from {vendor}...")
-            ack_received = self.task_ack_received.wait(timeout=ack_timeout)
+            ack_received = self.vendor_ack_events[vendor].wait(timeout=ack_timeout)
             if not ack_received:
                 self.get_logger().error(f"❌ ACK timeout from {vendor} after {ack_timeout}s")
                 return False
@@ -978,33 +945,21 @@ class SuperFactoryNode(Node):
                 return True
 
             self.get_logger().info(f"⏳ Waiting for task completion from {vendor}...")
-            complete_received = self.task_complete.wait(timeout=complete_timeout)
+            complete_received = self.vendor_complete_events[vendor].wait(timeout=complete_timeout)
             if not complete_received:
                 self.get_logger().error(f"❌ Task completion timeout from {vendor}")
                 return False
 
         return True
 
-    def _wait_for_ir(self, ir_key: str, timeout: float) -> bool:
-        """
-        Block until the conveyor confirms it has stopped for ir_key.
-        The conveyor only publishes after control_conveyor(False) succeeds,
-        so there is no stale state — we always wait for a fresh signal.
-        """
-        self.get_logger().info(f"⏳ Waiting for conveyor stop: {ir_key}...")
+    def _wait_for_ir(self, ir_key, timeout):
         with self._ir_lock:
-            if ir_key not in self.ir_ready_events:
-                self.ir_ready_events[ir_key] = threading.Event()
-            self.ir_ready_events[ir_key].clear()
-
-        fired = self.ir_ready_events[ir_key].wait(timeout=timeout)
-        if not fired:
-            self.get_logger().error(f"❌ Conveyor stop timeout for {ir_key}")
+            event = self.ir_ready_events.setdefault(ir_key, threading.Event())
+        if not event.wait(timeout):
+            self.get_logger().error(f'No stopped chip at {ir_key}')
             return False
-
         with self._ir_lock:
-            self.ir_ready_events[ir_key].clear()
-
+            event.clear()
         return True
 
     def _get_ir_ready_key_from_command(self, command: str):
@@ -1092,15 +1047,16 @@ class SuperFactoryNode(Node):
         msg = String()
         msg.data = envelope
 
-        self.command_publishers[vendor].publish(msg)
-        self.get_logger().info(f"📤 Command sent to {vendor}: {command}")
-
         # Record the most recent XARM command so _route_ready_to_agv can
         # check whether the drop target was an AGV or a conveyor.
         if vendor == 'lite6' and '|' in command:
             arm_id = command.split('|')[0].strip().upper()
             if arm_id in ('XARM1', 'XARM2'):
                 self._pending_xarm_commands[arm_id] = command
+
+
+        self.command_publishers[vendor].publish(msg)
+        self.get_logger().info(f"📤 Command sent to {vendor}: {command}")
 
     # ==================== VENDOR CALLBACK HANDLERS ====================
 
@@ -1117,6 +1073,7 @@ class SuperFactoryNode(Node):
 
         # Set ACK flag (vendor factories send ACK for their commands)
         self.task_ack_received.set()
+        self.vendor_ack_events[vendor].set()
 
     def _on_vendor_status_received(self, msg, vendor: str):
         """
@@ -1133,6 +1090,21 @@ class SuperFactoryNode(Node):
             vendor: Vendor name
         """
         status_msg = msg.data
+        if status_msg.upper().startswith('COMMAND_FAILED:'):
+            rid = status_msg.split(':')[1].strip().upper()
+            self.command_failures[rid] = status_msg
+            event = (self.robot_completion_events if vendor == 'niryo' else self.xarm_completion_events).get(rid)
+            if event:
+                event.set()
+            return
+        if vendor == 'conveyor' and status_msg.upper().startswith('IR_CLEAR'):
+            fields = [x.strip() for x in status_msg.split('|')]
+            if len(fields) >= 3:
+                with self._ir_lock:
+                    event = self.ir_ready_events.get(fields[2].upper())
+                    if event:
+                        event.clear()
+            return
         # Suppress repeated AGV heartbeats once the gate is already set
         _is_agv_heartbeat = (
             status_msg.strip() == 'AGV_READY_AT_A' and (
@@ -1165,9 +1137,11 @@ class SuperFactoryNode(Node):
             'COMPLETE' in stripped and ':' not in stripped
         ):
             self.task_complete.set()
+            self.vendor_complete_events[vendor].set()
 
         # AGV readiness at loading position A
         if status_msg.strip() == 'AGV_READY_AT_A':
+            self.agv_ready_time[vendor] = time.monotonic()
             if vendor == 'agv':
                 if not self._agv_at_a.is_set():
                     self._agv_at_a.set()

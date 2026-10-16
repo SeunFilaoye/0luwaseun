@@ -1,0 +1,16 @@
+# Reduced-run Niryo driver profile. R3 is at .223; logical R4 is at .227.
+rosbridge_port: 9090
+robot_namespaces:
+  - "robot1"
+  - "robot2"
+  - "robot3"
+  - "robot4"
+  - "robot5"
+  - "robot6"
+robot_ips:
+  - "192.168.0.150"
+  - "ned2-f9-30e-c2c.local"
+  - "192.168.0.223"
+  - "192.168.0.227"
+  - "ned2-2a-047-144.local"
+  - "ned2-8d-24d-5f2.local"
